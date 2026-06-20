@@ -26,6 +26,8 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 *.log
+backend-api*.log
+backend-auth-review*.log
 .trae/
 
 # macOS
