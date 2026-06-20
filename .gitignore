@@ -25,9 +25,7 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
-expo-web*.log
-backend-api*.log
-backend-auth-review*.log
+*.log
 .trae/
 
 # macOS
