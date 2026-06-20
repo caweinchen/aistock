@@ -25,6 +25,10 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+expo-web*.log
+backend-api*.log
+backend-auth-review*.log
+.trae/
 
 # macOS
 .DS_Store
@@ -32,9 +36,15 @@ yarn-error.*
 
 # local env files
 .env*.local
+.venv/
 
 # typescript
 *.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+backend/data/*.db
 
 # generated native folders
 /ios

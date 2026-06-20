@@ -1,0 +1,9 @@
+-- 创建数据库
+CREATE DATABASE IF NOT EXISTS at_stock DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- 创建用户并授权
+CREATE USER IF NOT EXISTS 'aistock'@'%' IDENTIFIED BY 'CHANGE_ME_STRONG_PASSWORD';
+GRANT ALL PRIVILEGES ON at_stock.* TO 'aistock'@'%';
+FLUSH PRIVILEGES;
+
+USE at_stock;

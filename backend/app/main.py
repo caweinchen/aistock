@@ -1,0 +1,552 @@
+from datetime import datetime, timezone, timedelta
+from typing import Literal
+
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from backend.app.database import init_db, get_db, init_sample_data, AuthSession, User, WatchlistItem, Stock, FactorScoreDB, StrategyResultDB, PricePointDB, AlertItemDB
+from backend.app.security import generate_auth_token, hash_password, hash_token, is_password_hash, verify_password
+
+Signal = Literal["neutral", "buy", "sell"]
+RiskLevel = Literal["low", "medium", "high"]
+TradeAction = Literal["buy", "sell"]
+StrategyTemplate = Literal["trend-breakout", "low-valuation-reversal", "dividend-defense"]
+
+
+class StockSummary(BaseModel):
+    code: str
+    name: str
+    price: float
+    change_percent: float
+    score: int = Field(ge=0, le=100)
+    signal: Signal
+
+
+class FactorScore(BaseModel):
+    key: str
+    label: str
+    value: int = Field(ge=0, le=100)
+    description: str
+
+
+class StrategyResult(BaseModel):
+    id: str
+    name: str
+    period: str
+    return_rate: float
+    max_drawdown: float
+    win_rate: float
+    risk: RiskLevel
+    summary: str
+
+
+class BacktestTrade(BaseModel):
+    date: str
+    action: TradeAction
+    price: float
+    quantity: int
+    reason: str
+
+
+class StrategyDetail(BaseModel):
+    strategy: StrategyResult
+    annualized_return: float
+    sharpe_ratio: float
+    trade_count: int
+    rules: list[str]
+    trades: list[BacktestTrade]
+
+
+class BacktestRequest(BaseModel):
+    code: str
+    name: str = "Custom Strategy"
+    template: StrategyTemplate = "trend-breakout"
+    lookback_days: int = Field(default=180, ge=30, le=720)
+    risk: RiskLevel = "medium"
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    token: str
+    username: str
+
+
+class ChangePasswordRequest(BaseModel):
+    username: str
+    old_password: str
+    new_password: str
+
+
+class PasswordStrengthResponse(BaseModel):
+    valid: bool
+    score: int
+    messages: list[str]
+
+
+class AlertItem(BaseModel):
+    level: RiskLevel
+    title: str
+    message: str
+
+
+class PricePoint(BaseModel):
+    date: str
+    close: float
+    volume: int
+
+
+class StockDetail(BaseModel):
+    stock: StockSummary
+    factors: list[FactorScore]
+    strategies: list[StrategyResult]
+    alerts: list[AlertItem]
+    history: list[PricePoint]
+    ai_summary: str
+    data_status: str
+    updated_at: datetime
+
+
+app = FastAPI(
+    title="AIStock API",
+    version="0.1.0",
+    description="Backend API for AIStock mobile stock selection and detail panels.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# 数据库初始化
+@app.on_event("startup")
+def on_startup():
+    init_db()
+    db = next(get_db())
+    init_sample_data(db)
+
+
+def stock_to_summary(stock: Stock) -> StockSummary:
+    return StockSummary(
+        code=stock.code,
+        name=stock.name,
+        price=stock.price,
+        change_percent=stock.change_percent,
+        score=stock.score,
+        signal=stock.signal,
+    )
+
+
+def db_factor_to_model(factor: FactorScoreDB) -> FactorScore:
+    return FactorScore(
+        key=factor.key,
+        label=factor.label,
+        value=factor.value,
+        description=factor.description,
+    )
+
+
+def db_strategy_to_model(strategy: StrategyResultDB) -> StrategyResult:
+    return StrategyResult(
+        id=strategy.id,
+        name=strategy.name,
+        period=strategy.period,
+        return_rate=strategy.return_rate,
+        max_drawdown=strategy.max_drawdown,
+        win_rate=strategy.win_rate,
+        risk=strategy.risk,
+        summary=strategy.summary,
+    )
+
+
+def db_price_to_model(price: PricePointDB) -> PricePoint:
+    return PricePoint(
+        date=price.date,
+        close=price.close,
+        volume=price.volume,
+    )
+
+
+def db_alert_to_model(alert: AlertItemDB) -> AlertItem:
+    return AlertItem(
+        level=alert.level,
+        title=alert.title,
+        message=alert.message,
+    )
+
+
+def get_stock_detail(db: Session, code: str) -> StockDetail:
+    stock = db.query(Stock).filter(Stock.code == code).first()
+    if not stock:
+        raise HTTPException(status_code=404, detail="Stock not found")
+
+    factors = db.query(FactorScoreDB).filter(FactorScoreDB.stock_code == code).all()
+    strategies = db.query(StrategyResultDB).filter(StrategyResultDB.stock_code == code).all()
+    history = db.query(PricePointDB).filter(PricePointDB.stock_code == code).all()
+    alerts = db.query(AlertItemDB).filter(AlertItemDB.stock_code == code).all()
+
+    return StockDetail(
+        stock=stock_to_summary(stock),
+        factors=[db_factor_to_model(f) for f in factors],
+        strategies=[db_strategy_to_model(s) for s in strategies],
+        alerts=[db_alert_to_model(a) for a in alerts],
+        history=[db_price_to_model(h) for h in history],
+        ai_summary=stock.ai_summary,
+        data_status=stock.data_status,
+        updated_at=stock.updated_at,
+    )
+
+
+def get_watchlist_user(db: Session, username: str = "admin") -> User:
+    user = db.query(User).filter(User.username == username).first()
+    if user:
+        return user
+
+    user = User(username=username, password=hash_password("admin123"))
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.get("/api/stocks", response_model=list[StockSummary])
+def get_stocks(db: Session = Depends(get_db)):
+    stocks = db.query(Stock).all()
+    return [stock_to_summary(s) for s in stocks]
+
+
+@app.get("/api/stocks/search", response_model=list[StockSummary])
+def search_stocks(q: str = "", db: Session = Depends(get_db)):
+    keyword = q.strip().lower()
+    if not keyword:
+        return get_stocks(db)
+
+    stocks = db.query(Stock).filter(
+        (Stock.code.ilike(f"%{keyword}%")) | (Stock.name.ilike(f"%{keyword}%"))
+    ).all()
+    return [stock_to_summary(s) for s in stocks]
+
+
+@app.get("/api/stocks/{code}", response_model=StockDetail)
+def get_stock_detail_api(code: str, db: Session = Depends(get_db)):
+    return get_stock_detail(db, code)
+
+
+@app.get("/api/stocks/{code}/strategies", response_model=list[StrategyResult])
+def get_stock_strategies(code: str, db: Session = Depends(get_db)):
+    strategies = db.query(StrategyResultDB).filter(StrategyResultDB.stock_code == code).all()
+    return [db_strategy_to_model(s) for s in strategies]
+
+
+@app.get("/api/stocks/{code}/strategies/{strategy_id}", response_model=StrategyDetail)
+def get_stock_strategy_detail(code: str, strategy_id: str, db: Session = Depends(get_db)):
+    detail = get_stock_detail(db, code)
+    for strategy in detail.strategies:
+        if strategy.id == strategy_id:
+            return build_strategy_detail(detail, strategy)
+    raise HTTPException(status_code=404, detail="Strategy not found")
+
+
+@app.get("/api/stocks/{code}/history", response_model=list[PricePoint])
+def get_stock_history(code: str, db: Session = Depends(get_db)):
+    history = db.query(PricePointDB).filter(PricePointDB.stock_code == code).all()
+    return [db_price_to_model(h) for h in history]
+
+
+@app.get("/api/stocks/{code}/factors", response_model=list[FactorScore])
+def get_stock_factors(code: str, db: Session = Depends(get_db)):
+    factors = db.query(FactorScoreDB).filter(FactorScoreDB.stock_code == code).all()
+    return [db_factor_to_model(f) for f in factors]
+
+
+@app.get("/api/stocks/{code}/alerts", response_model=list[AlertItem])
+def get_stock_alerts(code: str, db: Session = Depends(get_db)):
+    alerts = db.query(AlertItemDB).filter(AlertItemDB.stock_code == code).all()
+    return [db_alert_to_model(a) for a in alerts]
+
+
+@app.post("/api/backtests", response_model=StrategyDetail)
+def create_backtest(request: BacktestRequest, db: Session = Depends(get_db)) -> StrategyDetail:
+    detail = get_stock_detail(db, request.code)
+    strategy_detail = build_custom_backtest(detail, request)
+
+    # 保存到数据库
+    strategy_db = StrategyResultDB(
+        id=strategy_detail.strategy.id,
+        stock_code=request.code,
+        name=strategy_detail.strategy.name,
+        period=strategy_detail.strategy.period,
+        return_rate=strategy_detail.strategy.return_rate,
+        max_drawdown=strategy_detail.strategy.max_drawdown,
+        win_rate=strategy_detail.strategy.win_rate,
+        risk=strategy_detail.strategy.risk,
+        summary=strategy_detail.strategy.summary,
+    )
+    db.add(strategy_db)
+    db.commit()
+
+    return strategy_detail
+
+
+def build_strategy_detail(detail: StockDetail, strategy: StrategyResult) -> StrategyDetail:
+    profile_by_strategy = {
+        "trend-breakout": [
+            "Price breaks through 50-day moving average",
+            "Volume increases significantly",
+            "RSI > 50",
+            "MACD golden cross",
+        ],
+        "low-valuation-reversal": [
+            "PE ratio below historical average",
+            "PB ratio at low percentile",
+            "Positive earnings surprise",
+            "Strong balance sheet",
+        ],
+        "dividend-defense": [
+            "Dividend yield > 3%",
+            "Dividend payout ratio stable",
+            "Consistent dividend growth",
+            "Low debt ratio",
+        ],
+    }
+
+    rules = profile_by_strategy.get(strategy.id.split("-")[0] + "-" + strategy.id.split("-")[1], [])
+
+    trades = []
+    base_date = datetime(2024, 1, 1)
+    for i in range(5):
+        trade_date = (base_date + timedelta(days=i * 30)).strftime("%Y-%m-%d")
+        action: TradeAction = "buy" if i % 2 == 0 else "sell"
+        trades.append(BacktestTrade(
+            date=trade_date,
+            action=action,
+            price=detail.history[i].close,
+            quantity=100,
+            reason=f"Strategy signal triggered",
+        ))
+
+    annualized_return = strategy.return_rate * (365 / 180)
+    sharpe_ratio = min(2.5, max(0.5, strategy.return_rate / abs(strategy.max_drawdown)))
+
+    return StrategyDetail(
+        strategy=strategy,
+        annualized_return=round(annualized_return, 2),
+        sharpe_ratio=round(sharpe_ratio, 2),
+        trade_count=len(trades),
+        rules=rules,
+        trades=trades,
+    )
+
+
+def build_custom_backtest(detail: StockDetail, request: BacktestRequest) -> StrategyDetail:
+    from datetime import timedelta
+
+    first = detail.history[0]
+    last = detail.history[-1]
+    raw_return = (last.close - first.close) / first.close * 100
+
+    template_profile = {
+        "trend-breakout": {
+            "name": "Trend Breakout",
+            "return_bias": 1.25,
+            "drawdown": -7.2,
+            "summary": "Custom trend breakout strategy backtest completed, focus on trend effectiveness and stop-loss rules.",
+        },
+        "low-valuation-reversal": {
+            "name": "Low Valuation Reversal",
+            "return_bias": 0.95,
+            "drawdown": -5.4,
+            "summary": "Custom valuation reversal strategy backtest completed, focus on whether undervaluation has capital recognition.",
+        },
+        "dividend-defense": {
+            "name": "Dividend Defense",
+            "return_bias": 0.72,
+            "drawdown": -3.8,
+            "summary": "Custom dividend defense strategy backtest completed, more inclined to low volatility and stable holding.",
+        },
+    }
+
+    profile = template_profile[request.template]
+    strategy = StrategyResult(
+        id=f"custom-{request.template}-{request.lookback_days}-{datetime.now().timestamp()}",
+        name=request.name.strip() or f"Custom {profile['name']}",
+        period=f"Last {request.lookback_days} days",
+        return_rate=round(raw_return * profile["return_bias"], 2),
+        max_drawdown=profile["drawdown"],
+        win_rate=round(min(72, max(38, detail.stock.score * 0.68)), 1),
+        risk=request.risk,
+        summary=profile["summary"],
+    )
+
+    return build_strategy_detail(detail, strategy)
+
+
+@app.get("/api/watchlist")
+def get_watchlist(username: str = "admin", db: Session = Depends(get_db)):
+    user = get_watchlist_user(db, username)
+    items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).all()
+    return {"codes": [item.stock_code for item in items]}
+
+
+@app.post("/api/watchlist/{code}")
+def add_to_watchlist(code: str, username: str = "admin", db: Session = Depends(get_db)):
+    if not db.query(Stock).filter(Stock.code == code).first():
+        raise HTTPException(status_code=404, detail="Stock not found")
+    user = get_watchlist_user(db, username)
+    existing_item = db.query(WatchlistItem).filter(
+        WatchlistItem.user_id == user.id,
+        WatchlistItem.stock_code == code,
+    ).first()
+    if not existing_item:
+        db.add(WatchlistItem(user_id=user.id, stock_code=code))
+        db.commit()
+    codes = [item.stock_code for item in db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).all()]
+    stocks = db.query(Stock).filter(Stock.code.in_(codes)).all() if codes else []
+    return [stock_to_summary(s) for s in stocks]
+
+
+@app.delete("/api/watchlist/{code}")
+def remove_from_watchlist(code: str, username: str = "admin", db: Session = Depends(get_db)):
+    if not db.query(Stock).filter(Stock.code == code).first():
+        raise HTTPException(status_code=404, detail="Stock not found")
+    user = get_watchlist_user(db, username)
+    item = db.query(WatchlistItem).filter(
+        WatchlistItem.user_id == user.id,
+        WatchlistItem.stock_code == code,
+    ).first()
+    if item:
+        db.delete(item)
+        db.commit()
+    codes = [item.stock_code for item in db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).all()]
+    stocks = db.query(Stock).filter(Stock.code.in_(codes)).all() if codes else []
+    return [stock_to_summary(s) for s in stocks]
+
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc)}
+
+
+@app.post("/api/auth/login", response_model=LoginResponse)
+def login(request: LoginRequest, db: Session = Depends(get_db)):
+    """用户登录接口"""
+    user = db.query(User).filter(User.username == request.username).first()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    if not verify_password(request.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    if not is_password_hash(user.password):
+        user.password = hash_password(request.password)
+        user.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+    token = generate_auth_token()
+    db.add(AuthSession(
+        user_id=user.id,
+        token_hash=hash_token(token),
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+    ))
+    db.commit()
+
+    return LoginResponse(token=token, username=user.username)
+
+
+@app.post("/api/auth/change-password")
+def change_password(request: ChangePasswordRequest, db: Session = Depends(get_db)):
+    """修改密码接口"""
+    user = db.query(User).filter(User.username == request.username).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not verify_password(request.old_password, user.password):
+        raise HTTPException(status_code=401, detail="Old password is incorrect")
+
+    strength = validate_password_strength(request.new_password)
+    if not strength["valid"]:
+        raise HTTPException(status_code=400, detail=strength["messages"])
+
+    user.password = hash_password(request.new_password)
+    user.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return {"success": True, "message": "Password changed successfully"}
+
+
+@app.post("/api/auth/validate-password", response_model=PasswordStrengthResponse)
+def check_password_strength(password: str):
+    """验证密码强度"""
+    return validate_password_strength(password)
+
+
+@app.get("/api/auth/generate-password")
+def generate_strong_password():
+    """生成随机强密码"""
+    import random
+    import string
+
+    lowercase = random.choice(string.ascii_lowercase)
+    uppercase = random.choice(string.ascii_uppercase)
+    digit = random.choice(string.digits)
+    special = random.choice("!@#$%^&*")
+
+    remaining_chars = random.choices(
+        string.ascii_letters + string.digits + "!@#$%^&*",
+        k=4
+    )
+
+    password_list = list(lowercase + uppercase + digit + special + ''.join(remaining_chars))
+    random.shuffle(password_list)
+    password = ''.join(password_list)
+
+    return {"password": password, "length": len(password)}
+
+
+def validate_password_strength(password: str) -> dict:
+    """验证密码强度（强密码要求）"""
+    messages = []
+    score = 0
+
+    if len(password) >= 8:
+        score += 1
+    else:
+        messages.append("Password must be at least 8 characters long")
+
+    if any(c.isupper() for c in password):
+        score += 1
+    else:
+        messages.append("Password must contain at least one uppercase letter")
+
+    if any(c.islower() for c in password):
+        score += 1
+    else:
+        messages.append("Password must contain at least one lowercase letter")
+
+    if any(c.isdigit() for c in password):
+        score += 1
+    else:
+        messages.append("Password must contain at least one number")
+
+    special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    if any(c in special_chars for c in password):
+        score += 1
+    else:
+        messages.append("Password must contain at least one special character (!@#$%^&* etc.)")
+
+    return {
+        "valid": score >= 5,
+        "score": score,
+        "messages": messages if messages else ["Password is strong"]
+    }
