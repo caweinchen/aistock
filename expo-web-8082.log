@@ -1,0 +1,16 @@
+
+> aistock@1.0.0 web
+> expo start --web --port 8082
+
+Starting project at D:\CodexCode\AIStock-new
+Starting Metro Bundler
+
+Waiting on http://localhost:8082
+Logs for your project will appear below.
+[31m[7m[1m ERROR [22m[27m[39m An unexpected error occurred while installing the latest version of React Native DevTools. Using a fallback version instead. Details:
+
+dotslash error: 'fetch' command failed
+caused by: failed to unpack `\\?\C:\Users\38019\AppData\Local\dotslash\1f\.tmpmq8FXP\React Native DevTools-win32-x64\d3dcompiler_47.dll`
+caused by: failed to unpack `React Native DevTools-win32-x64/d3dcompiler_47.dll` into `\\?\C:\Users\38019\AppData\Local\dotslash\1f\.tmpmq8FXP\React Native DevTools-win32-x64\d3dcompiler_47.dll`
+caused by: 拒绝访问。 (os error 5)
+
