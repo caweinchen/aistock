@@ -4,83 +4,152 @@ AIStock Mobile 是一个基于 Expo + React Native 的跨平台股票分析 App 
 
 ## 当前版本
 
-当前实现的是研究型 MVP 首页，包含：
+当前实现的是一个完整的股票分析 MVP，包含以下功能：
 
-- 市场温度、预警数量、策略胜率概览
-- 自选股评分列表
-- 个股因子雷达入口
-- 策略回测摘要
-- 投资风险提示
+### ✅ 已完成功能
+
+**前端功能：**
+- ✅ 市场温度、预警数量、策略胜率概览
+- ✅ 自选股评分列表（支持搜索）
+- ✅ 个股详情页（因子雷达、策略回测、风险提示）
+- ✅ 用户登录/注册系统
+- ✅ 个人中心（修改密码、语言设置）
+- ✅ 多语言支持（简体中文、繁体中文、English）
+- ✅ 服务器配置页面（可配置后端地址）
+
+**后端功能：**
+- ✅ FastAPI 后端服务
+- ✅ MySQL 数据库持久化存储
+- ✅ 用户认证系统（PBKDF2 密码加密）
+- ✅ 股票数据查询和搜索
+- ✅ 因子评分、策略回测、风险预警接口
+- ✅ 价格历史数据接口
+
+**技术架构：**
+- ✅ 前端：Expo + React Native + TypeScript
+- ✅ 后端：Python FastAPI + SQLAlchemy
+- ✅ 数据库：MySQL（支持 SQLite 切换）
+- ✅ 密码安全：PBKDF2 加密
 
 界面中的行情和评分是模拟数据，方便先验证产品体验。接入真实行情前，不应把这些数据用于投资决策。
 
-## 推荐技术路线
+## 技术栈
 
-- 移动端：Expo + React Native + TypeScript
-- 数据源：TuShare Pro 或自建数据服务
-- 本地缓存：SQLite / MMKV
-- 服务端：Python FastAPI
-- 数据存储：DuckDB / PostgreSQL
-- 回测引擎：Backtrader 起步，复杂场景再评估 Lean
-- AI 能力：先做研报摘要、风险解释、因子归因，不直接承诺涨跌预测
+| 层级 | 技术 |
+|------|------|
+| 移动端 | Expo + React Native + TypeScript |
+| 服务端 | Python FastAPI + SQLAlchemy |
+| 数据库 | MySQL / SQLite |
+| 数据源 | TuShare Pro（待接入）或自建数据服务 |
 
-## 运行
+## 快速开始
+
+### 前端启动
 
 ```bash
 npm install
-npm run start
-```
-
-常用平台命令：
-
-```bash
-npm run android
-npm run ios
 npm run web
 ```
 
-说明：iOS 原生构建需要 macOS 和 Xcode。在 Windows 上可以用 Expo Go 预览，或使用 EAS Build 云端打包。
-
-## 后端接口
-
-项目已包含一个 FastAPI 后端原型：
+### 后端启动
 
 ```bash
-python -m venv .venv
+# 激活虚拟环境
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
-```
 
-核心接口：
-
-- `GET /api/stocks`：返回自选股列表
-- `GET /api/stocks/search?q=keyword`：按股票代码或名称搜索
-- `GET /api/watchlist`：返回自选股列表
-- `POST /api/watchlist/{code}`：加入自选股
-- `DELETE /api/watchlist/{code}`：移出自选股
-- `GET /api/stocks/{code}`：返回选中股票的详情、因子、策略、预警和 AI 摘要
-- `GET /api/stocks/{code}/factors`：返回因子评分
-- `GET /api/stocks/{code}/strategies`：返回策略回测摘要
-- `GET /api/stocks/{code}/strategies/{strategy_id}`：返回单个策略的规则、指标和交易明细
-- `GET /api/stocks/{code}/alerts`：返回风险提示
-- `GET /api/stocks/{code}/history`：返回价格走势数据
-
-移动端当前会自动连接：
-
-- Web / iOS 模拟器：`http://127.0.0.1:8000`
-- Android 模拟器：`http://10.0.2.2:8000`
-
-如果用真实手机预览，需要把 `App.tsx` 里的 `API_BASE_URL` 改成本机局域网 IP，例如 `http://192.168.1.10:8000`。
-同时后端需要这样启动，允许局域网设备访问：
-
-```bash
+# 启动服务
 .\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
-## 下一步
+### 部署配置
 
-1. 抽出 `src/` 目录，拆分页面、组件和数据服务。
-2. 增加自选股搜索、详情页和回测详情页。
-3. 建立后端 API，统一封装行情、财务、策略回测和 AI 解释。
-4. 加入登录、数据缓存、错误状态和免责声明。
-5. 准备应用商店上架所需的隐私政策和合规文案。
+后端配置文件位于 `backend/.env.example`，复制并修改：
+
+```bash
+cd backend
+copy .env.example .env
+# 编辑 .env 修改数据库连接信息
+```
+
+## API 接口
+
+### 认证接口
+- `POST /api/auth/login` - 用户登录
+- `POST /api/auth/change-password` - 修改密码
+- `POST /api/auth/validate-password` - 验证密码强度
+- `GET /api/auth/generate-password` - 生成随机强密码
+
+### 股票接口
+- `GET /api/stocks` - 返回自选股列表
+- `GET /api/stocks/search?q=keyword` - 按股票代码或名称搜索
+- `GET /api/stocks/{code}` - 返回选中股票的详情
+- `GET /api/stocks/{code}/factors` - 返回因子评分
+- `GET /api/stocks/{code}/strategies` - 返回策略回测摘要
+- `GET /api/stocks/{code}/strategies/{strategy_id}` - 返回单个策略详情
+- `GET /api/stocks/{code}/alerts` - 返回风险提示
+- `GET /api/stocks/{code}/history` - 返回价格走势数据
+
+### 自选股接口
+- `GET /api/watchlist` - 返回自选股列表
+- `POST /api/watchlist/{code}` - 加入自选股
+- `DELETE /api/watchlist/{code}` - 移出自选股
+
+### 其他接口
+- `GET /api/health` - 健康检查
+- `POST /api/backtests` - 创建自定义回测
+
+## 测试账号
+
+| 用户名 | 密码 |
+|--------|------|
+| admin | Test@bcd!234 |
+
+## 待完成功能
+
+### 核心功能
+- [ ] 接入真实行情数据（TuShare Pro）
+- [ ] 个股详情页完整回测功能
+- [ ] 自定义策略回测构建器
+
+### 用户体验
+- [ ] 投资组合管理
+- [ ] 消息推送通知
+- [ ] 离线数据缓存
+
+### 合规与上架
+- [ ] 完善免责声明
+- [ ] 应用商店上架材料准备
+- [ ] 用户协议完善
+
+## 项目结构
+
+```
+AIStock-new/
+├── src/
+│   ├── pages/          # 页面组件
+│   │   ├── HomeScreen.tsx
+│   │   ├── LoginScreen.tsx
+│   │   ├── ProfileScreen.tsx
+│   │   └── SettingsScreen.tsx
+│   ├── components/     # 可复用组件
+│   ├── hooks/          # React Hooks
+│   ├── services/        # API 服务
+│   ├── i18n/           # 多语言配置
+│   └── utils/           # 工具函数
+├── backend/
+│   ├── app/
+│   │   ├── main.py     # FastAPI 入口
+│   │   ├── config.py    # 配置文件
+│   │   ├── database.py  # 数据库模型
+│   │   └── security.py  # 安全认证
+│   └── requirements.txt
+└── ...
+```
+
+## 法律声明
+
+本应用仅供参考和学习研究使用，不构成任何投资建议。股票投资有风险，入市需谨慎。
+
+详细法律条款请参阅：
+- [隐私政策](./PRIVACY.md)
+- [服务条款](./TERMS.md)
