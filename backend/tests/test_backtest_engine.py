@@ -1,6 +1,8 @@
 import unittest
+from unittest.mock import Mock, patch
 
 from backend.app.backtest_engine import build_strategy_summaries, normalize_price_bars, run_backtest
+from backend.app.database import PricePointDB
 from backend.app.main import (
     PricePoint,
     StockDetail,
@@ -9,6 +11,7 @@ from backend.app.main import (
     build_strategy_detail,
     engine_result_to_detail,
     engine_result_to_strategy,
+    ensure_price_history,
 )
 
 
@@ -134,6 +137,58 @@ class BacktestApiConversionTests(unittest.TestCase):
         self.assertEqual(result.strategy.period, strategy.period)
         self.assertEqual(result.trade_count, expected.trade_count)
         self.assertEqual(result.annualized_return, expected.annualized_return)
+
+    def test_ensure_price_history_loads_tushare_when_local_history_empty(self):
+        class FakeQuery:
+            def __init__(self, rows):
+                self.rows = rows
+
+            def filter(self, *_args):
+                return self
+
+            def order_by(self, *_args):
+                return self
+
+            def all(self):
+                return self.rows
+
+            def delete(self):
+                self.rows.clear()
+
+        class FakeDb:
+            def __init__(self):
+                self.rows = []
+                self.commits = 0
+
+            def query(self, _model):
+                return FakeQuery(self.rows)
+
+            def add(self, row):
+                self.rows.append(row)
+
+            def commit(self):
+                self.commits += 1
+
+            def rollback(self):
+                raise AssertionError("rollback should not be called")
+
+        db = FakeDb()
+        stock = Mock(code="600519")
+        tushare = Mock()
+        tushare.get_daily_price.return_value = [
+            {"trade_date": "20240102", "close": 10.2, "vol": 1200},
+            {"trade_date": "20240101", "close": 10.0, "vol": 1000},
+        ]
+
+        with patch("backend.app.main.tushare_config.enabled", True), patch(
+            "backend.app.main.get_tushare_service", return_value=tushare
+        ):
+            history = ensure_price_history(db, stock)
+
+        tushare.get_daily_price.assert_called_once()
+        self.assertEqual([row.date for row in history], ["2024-01-01", "2024-01-02"])
+        self.assertTrue(all(isinstance(row, PricePointDB) for row in history))
+        self.assertEqual(db.commits, 1)
 
 
 if __name__ == "__main__":

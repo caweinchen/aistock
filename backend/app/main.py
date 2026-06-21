@@ -253,6 +253,72 @@ def get_price_history(db: Session, code: str) -> list[PricePointDB]:
     )
 
 
+def _item_value(item, key: str, default=None):
+    if isinstance(item, dict):
+        return item.get(key, default)
+    return getattr(item, key, default)
+
+
+def _format_tushare_date(value) -> str:
+    text = str(value or "").strip()
+    if len(text) == 8 and text.isdigit():
+        return f"{text[:4]}-{text[4:6]}-{text[6:]}"
+    return text
+
+
+def _stock_ts_code(stock: Stock) -> str:
+    ts_code = getattr(stock, "ts_code", None)
+    if ts_code:
+        return ts_code
+    suffix = ".SH" if stock.code.startswith(("5", "6", "9")) else ".SZ"
+    return f"{stock.code}{suffix}"
+
+
+def _history_needs_refresh(history: list[PricePointDB]) -> bool:
+    if not history:
+        return True
+    latest = max(history, key=lambda price: price.date)
+    try:
+        latest_date = datetime.strptime(latest.date, "%Y-%m-%d").date()
+    except ValueError:
+        return True
+    return (datetime.now().date() - latest_date).days > 1
+
+
+def ensure_price_history(db: Session, stock: Stock) -> list[PricePointDB]:
+    history = get_price_history(db, stock.code)
+    if not _history_needs_refresh(history) or not tushare_config.enabled:
+        return history
+
+    try:
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=720)).strftime("%Y%m%d")
+        daily_data = get_tushare_service().get_daily_price(_stock_ts_code(stock), start_date, end_date)
+        if not daily_data:
+            return history
+
+        db.query(PricePointDB).filter(PricePointDB.stock_code == stock.code).delete()
+        for item in daily_data:
+            date = _format_tushare_date(_item_value(item, "date") or _item_value(item, "trade_date"))
+            close = float(_item_value(item, "close", 0) or 0)
+            if not date or close <= 0:
+                continue
+            db.add(
+                PricePointDB(
+                    stock_code=stock.code,
+                    date=date,
+                    close=close,
+                    volume=int(_item_value(item, "volume", _item_value(item, "vol", 0)) or 0),
+                )
+            )
+        db.commit()
+    except Exception:
+        db.rollback()
+        return history
+
+    return sorted(get_price_history(db, stock.code), key=lambda price: price.date)
+
+
 def parse_custom_strategy_id(strategy_id: str) -> tuple[str, int] | None:
     if not strategy_id.startswith("custom-"):
         return None
@@ -270,7 +336,7 @@ def get_stock_detail(db: Session, code: str) -> StockDetail:
         raise HTTPException(status_code=404, detail="Stock not found")
 
     factors = db.query(FactorScoreDB).filter(FactorScoreDB.stock_code == code).all()
-    history = get_price_history(db, code)
+    history = ensure_price_history(db, stock)
     alerts = db.query(AlertItemDB).filter(AlertItemDB.stock_code == code).all()
     custom_strategies = db.query(StrategyResultDB).filter(
         StrategyResultDB.stock_code == code,

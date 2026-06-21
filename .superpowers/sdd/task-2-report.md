@@ -59,3 +59,36 @@ Verification:
   - `python -m unittest backend.tests.test_backtest_engine -v`
 - Covering output summary:
   - Passed all 7 tests.
+
+---
+
+Second review fix follow-up:
+
+Files changed:
+- `backend/app/main.py`
+- `backend/tests/test_backtest_engine.py`
+
+Root cause:
+- The isolated worktree did not include the main checkout's uncommitted TuShare history-population logic, so backtests could still run against empty or stale `price_history` rows.
+
+TDD evidence:
+- Red command:
+  - `python -m unittest backend.tests.test_backtest_engine.BacktestApiConversionTests.test_ensure_price_history_loads_tushare_when_local_history_empty -v`
+- Red output summary:
+  - Failed during import with `ImportError: cannot import name 'ensure_price_history' from 'backend.app.main'`, proving no pre-backtest history-load path existed.
+
+Implementation summary:
+- Added `ensure_price_history(db, stock)` to load ordered local history and, when missing or stale and TuShare is enabled, call `get_tushare_service().get_daily_price(...)` using the stock ts_code or a schema-compatible code suffix fallback.
+- Persisted returned TuShare daily rows into existing `price_history` columns only: `stock_code`, `date`, `close`, `volume`.
+- Updated `get_stock_detail(...)` so strategy summaries, strategy detail, and custom backtests all receive history from the ensured path through the existing detail flow.
+- TuShare failures fall back to existing local rows instead of turning stock detail into a service outage.
+
+Verification:
+- Green command:
+  - `python -m unittest backend.tests.test_backtest_engine.BacktestApiConversionTests.test_ensure_price_history_loads_tushare_when_local_history_empty -v`
+- Green output summary:
+  - Passed.
+- Covering command:
+  - `python -m unittest backend.tests.test_backtest_engine -v`
+- Covering output summary:
+  - Passed all 8 tests.
