@@ -10,6 +10,7 @@ from backend.app.database import init_db, get_db, init_sample_data, AuthSession,
 from backend.app.security import generate_auth_token, hash_password, hash_token, is_password_hash, verify_password
 from backend.app.tushare_service import init_tushare, get_tushare_service
 from backend.app.config import tushare_config
+from backend.app.backtest_engine import BacktestResult, build_strategy_summaries, run_backtest
 
 Signal = Literal["neutral", "buy", "sell"]
 RiskLevel = Literal["low", "medium", "high"]
@@ -178,6 +179,39 @@ def db_strategy_to_model(strategy: StrategyResultDB) -> StrategyResult:
     )
 
 
+def engine_result_to_strategy(result: BacktestResult) -> StrategyResult:
+    return StrategyResult(
+        id=result.id,
+        name=result.name,
+        period=result.period,
+        return_rate=result.return_rate,
+        max_drawdown=result.max_drawdown,
+        win_rate=result.win_rate,
+        risk=result.risk,
+        summary=result.summary,
+    )
+
+
+def engine_result_to_detail(result: BacktestResult) -> StrategyDetail:
+    return StrategyDetail(
+        strategy=engine_result_to_strategy(result),
+        annualized_return=result.annualized_return,
+        sharpe_ratio=result.sharpe_ratio,
+        trade_count=result.trade_count,
+        rules=result.rules,
+        trades=[
+            BacktestTrade(
+                date=trade.date,
+                action=trade.action,
+                price=trade.price,
+                quantity=trade.quantity,
+                reason=trade.reason,
+            )
+            for trade in result.trades
+        ],
+    )
+
+
 def db_price_to_model(price: PricePointDB) -> PricePoint:
     return PricePoint(
         date=price.date,
@@ -194,20 +228,43 @@ def db_alert_to_model(alert: AlertItemDB) -> AlertItem:
     )
 
 
+def calculate_strategies(daily_data: list) -> list:
+    return [
+        {
+            "id": result.id,
+            "name": result.name,
+            "period": result.period,
+            "return_rate": result.return_rate,
+            "max_drawdown": result.max_drawdown,
+            "win_rate": result.win_rate,
+            "risk": result.risk,
+            "summary": result.summary,
+        }
+        for result in build_strategy_summaries(daily_data)
+    ]
+
+
 def get_stock_detail(db: Session, code: str) -> StockDetail:
     stock = db.query(Stock).filter(Stock.code == code).first()
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
     factors = db.query(FactorScoreDB).filter(FactorScoreDB.stock_code == code).all()
-    strategies = db.query(StrategyResultDB).filter(StrategyResultDB.stock_code == code).all()
     history = db.query(PricePointDB).filter(PricePointDB.stock_code == code).all()
     alerts = db.query(AlertItemDB).filter(AlertItemDB.stock_code == code).all()
+    custom_strategies = db.query(StrategyResultDB).filter(
+        StrategyResultDB.stock_code == code,
+        StrategyResultDB.id.like("custom-%"),
+    ).all()
+    strategy_models = [
+        StrategyResult(**strategy)
+        for strategy in calculate_strategies(history)
+    ] + [db_strategy_to_model(strategy) for strategy in custom_strategies]
 
     return StockDetail(
         stock=stock_to_summary(stock),
         factors=[db_factor_to_model(f) for f in factors],
-        strategies=[db_strategy_to_model(s) for s in strategies],
+        strategies=strategy_models,
         alerts=[db_alert_to_model(a) for a in alerts],
         history=[db_price_to_model(h) for h in history],
         ai_summary=stock.ai_summary,
@@ -276,8 +333,15 @@ def get_stock_detail_api(code: str, db: Session = Depends(get_db)):
 
 @app.get("/api/stocks/{code}/strategies", response_model=list[StrategyResult])
 def get_stock_strategies(code: str, db: Session = Depends(get_db)):
-    strategies = db.query(StrategyResultDB).filter(StrategyResultDB.stock_code == code).all()
-    return [db_strategy_to_model(s) for s in strategies]
+    history = db.query(PricePointDB).filter(PricePointDB.stock_code == code).all()
+    custom_strategies = db.query(StrategyResultDB).filter(
+        StrategyResultDB.stock_code == code,
+        StrategyResultDB.id.like("custom-%"),
+    ).all()
+    return [
+        StrategyResult(**strategy)
+        for strategy in calculate_strategies(history)
+    ] + [db_strategy_to_model(strategy) for strategy in custom_strategies]
 
 
 @app.get("/api/stocks/{code}/strategies/{strategy_id}", response_model=StrategyDetail)
@@ -385,96 +449,45 @@ def create_backtest(request: BacktestRequest, db: Session = Depends(get_db)) -> 
 
 
 def build_strategy_detail(detail: StockDetail, strategy: StrategyResult) -> StrategyDetail:
-    profile_by_strategy = {
-        "trend-breakout": [
-            "Price breaks through 50-day moving average",
-            "Volume increases significantly",
-            "RSI > 50",
-            "MACD golden cross",
-        ],
-        "low-valuation-reversal": [
-            "PE ratio below historical average",
-            "PB ratio at low percentile",
-            "Positive earnings surprise",
-            "Strong balance sheet",
-        ],
-        "dividend-defense": [
-            "Dividend yield > 3%",
-            "Dividend payout ratio stable",
-            "Consistent dividend growth",
-            "Low debt ratio",
-        ],
-    }
-
-    rules = profile_by_strategy.get(strategy.id.split("-")[0] + "-" + strategy.id.split("-")[1], [])
-
-    trades = []
-    base_date = datetime(2024, 1, 1)
-    for i in range(5):
-        trade_date = (base_date + timedelta(days=i * 30)).strftime("%Y-%m-%d")
-        action: TradeAction = "buy" if i % 2 == 0 else "sell"
-        trades.append(BacktestTrade(
-            date=trade_date,
-            action=action,
-            price=detail.history[i].close,
-            quantity=100,
-            reason=f"Strategy signal triggered",
-        ))
-
-    annualized_return = strategy.return_rate * (365 / 180)
-    sharpe_ratio = min(2.5, max(0.5, strategy.return_rate / abs(strategy.max_drawdown)))
-
-    return StrategyDetail(
-        strategy=strategy,
-        annualized_return=round(annualized_return, 2),
-        sharpe_ratio=round(sharpe_ratio, 2),
-        trade_count=len(trades),
-        rules=rules,
-        trades=trades,
+    result = run_backtest(
+        strategy.id,
+        detail.history,
+        name=strategy.name,
+        risk=strategy.risk,
     )
+    if not result:
+        raise HTTPException(status_code=400, detail="Insufficient price history for backtest")
+    return engine_result_to_detail(result)
 
 
 def build_custom_backtest(detail: StockDetail, request: BacktestRequest) -> StrategyDetail:
-    from datetime import timedelta
-
-    first = detail.history[0]
-    last = detail.history[-1]
-    raw_return = (last.close - first.close) / first.close * 100
-
-    template_profile = {
-        "trend-breakout": {
-            "name": "Trend Breakout",
-            "return_bias": 1.25,
-            "drawdown": -7.2,
-            "summary": "Custom trend breakout strategy backtest completed, focus on trend effectiveness and stop-loss rules.",
-        },
-        "low-valuation-reversal": {
-            "name": "Low Valuation Reversal",
-            "return_bias": 0.95,
-            "drawdown": -5.4,
-            "summary": "Custom valuation reversal strategy backtest completed, focus on whether undervaluation has capital recognition.",
-        },
-        "dividend-defense": {
-            "name": "Dividend Defense",
-            "return_bias": 0.72,
-            "drawdown": -3.8,
-            "summary": "Custom dividend defense strategy backtest completed, more inclined to low volatility and stable holding.",
-        },
-    }
-
-    profile = template_profile[request.template]
-    strategy = StrategyResult(
-        id=f"custom-{request.template}-{request.lookback_days}-{datetime.now().timestamp()}",
-        name=request.name.strip() or f"Custom {profile['name']}",
-        period=f"Last {request.lookback_days} days",
-        return_rate=round(raw_return * profile["return_bias"], 2),
-        max_drawdown=profile["drawdown"],
-        win_rate=round(min(72, max(38, detail.stock.score * 0.68)), 1),
+    strategy_id = f"custom-{request.template}-{request.lookback_days}-{int(datetime.now().timestamp())}"
+    result = run_backtest(
+        request.template,
+        detail.history,
+        name=request.name.strip() or None,
+        lookback_days=request.lookback_days,
         risk=request.risk,
-        summary=profile["summary"],
     )
-
-    return build_strategy_detail(detail, strategy)
+    if not result:
+        raise HTTPException(status_code=400, detail="Insufficient price history for backtest")
+    result = BacktestResult(
+        template=result.template,
+        id=strategy_id,
+        name=result.name,
+        period=f"Last {request.lookback_days} days",
+        return_rate=result.return_rate,
+        max_drawdown=result.max_drawdown,
+        win_rate=result.win_rate,
+        risk=result.risk,
+        summary=result.summary,
+        annualized_return=result.annualized_return,
+        sharpe_ratio=result.sharpe_ratio,
+        trade_count=result.trade_count,
+        rules=result.rules,
+        trades=result.trades,
+    )
+    return engine_result_to_detail(result)
 
 
 @app.get("/api/watchlist")

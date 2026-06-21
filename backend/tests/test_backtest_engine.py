@@ -1,6 +1,7 @@
 import unittest
 
 from backend.app.backtest_engine import build_strategy_summaries, normalize_price_bars, run_backtest
+from backend.app.main import engine_result_to_detail, engine_result_to_strategy
 
 
 def make_bar(day: int, close: float, volume: int = 1000) -> dict:
@@ -60,6 +61,21 @@ class BacktestEngineTests(unittest.TestCase):
             "low-valuation-reversal",
             "dividend-defense",
         })
+
+
+class BacktestApiConversionTests(unittest.TestCase):
+    def test_engine_result_converts_to_existing_strategy_models(self):
+        prices = [10] * 20 + [10.5, 11, 11.8, 12.5, 13.4, 14.2, 15, 15.8, 16.3, 17.0, 17.8, 18.4]
+        result = run_backtest("trend-breakout", [make_bar(i + 1, price) for i, price in enumerate(prices)])
+        assert result is not None
+
+        summary = engine_result_to_strategy(result)
+        detail = engine_result_to_detail(result)
+
+        self.assertEqual(summary.id, "trend-breakout")
+        self.assertEqual(detail.strategy.id, "trend-breakout")
+        self.assertEqual(detail.trade_count, len(result.trades))
+        self.assertEqual(detail.trades[0].action, "buy")
 
 
 if __name__ == "__main__":
