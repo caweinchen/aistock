@@ -104,7 +104,7 @@ copy .env.example .env
 |--------|------|
 | admin | Test@bcd!234 |
 
-## 待完成功能
+## 下一步
 
 ### 核心功能
 - [ ] 接入真实行情数据（TuShare Pro）

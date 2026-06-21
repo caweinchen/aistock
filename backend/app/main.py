@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from backend.app.database import init_db, get_db, init_sample_data, AuthSession, User, WatchlistItem, Stock, FactorScoreDB, StrategyResultDB, PricePointDB, AlertItemDB
 from backend.app.security import generate_auth_token, hash_password, hash_token, is_password_hash, verify_password
+from backend.app.tushare_service import init_tushare, get_tushare_service
+from backend.app.config import tushare_config
 
 Signal = Literal["neutral", "buy", "sell"]
 RiskLevel = Literal["low", "medium", "high"]
@@ -134,6 +136,14 @@ def on_startup():
     db = next(get_db())
     init_sample_data(db)
 
+    # 初始化 TuShare 服务
+    if tushare_config.token:
+        init_tushare(tushare_config.token)
+        print(f"TuShare Pro 已启用，Token: {tushare_config.token[:10]}...")
+    elif tushare_config.enabled:
+        init_tushare()
+        print("TuShare 免费版已启用")
+
 
 def stock_to_summary(stock: Stock) -> StockSummary:
     return StockSummary(
@@ -230,6 +240,29 @@ def search_stocks(q: str = "", db: Session = Depends(get_db)):
     if not keyword:
         return get_stocks(db)
 
+    # 优先从 TuShare 搜索
+    if tushare_config.enabled:
+        tushare_svc = get_tushare_service()
+        results = tushare_svc.search_stocks(keyword)
+        if results:
+            summaries = []
+            for r in results:
+                # 从数据库查找完整数据
+                stock = db.query(Stock).filter(Stock.code == r.get('ts_code', r.get('code'))).first()
+                if stock:
+                    summaries.append(stock_to_summary(stock))
+                else:
+                    # 创建临时摘要
+                    summaries.append(StockSummary(
+                        code=r.get('ts_code', r.get('code', '')),
+                        name=r.get('name', ''),
+                        price=0.0,
+                        change_percent=0.0,
+                        score=50,
+                        signal="neutral"
+                    ))
+            return summaries
+
     stocks = db.query(Stock).filter(
         (Stock.code.ilike(f"%{keyword}%")) | (Stock.name.ilike(f"%{keyword}%"))
     ).all()
@@ -260,6 +293,60 @@ def get_stock_strategy_detail(code: str, strategy_id: str, db: Session = Depends
 def get_stock_history(code: str, db: Session = Depends(get_db)):
     history = db.query(PricePointDB).filter(PricePointDB.stock_code == code).all()
     return [db_price_to_model(h) for h in history]
+
+
+@app.get("/api/stocks/{code}/realtime")
+def get_stock_realtime(code: str, db: Session = Depends(get_db)):
+    """获取股票实时行情"""
+    if not tushare_config.enabled:
+        raise HTTPException(status_code=503, detail="TuShare is not enabled")
+
+    tushare_svc = get_tushare_service()
+    quote = tushare_svc.get_realtime_quote(code)
+
+    if not quote:
+        raise HTTPException(status_code=404, detail="Failed to get realtime quote")
+
+    return quote
+
+
+@app.get("/api/stocks/{code}/refresh")
+def refresh_stock_data(code: str, db: Session = Depends(get_db)):
+    """从 TuShare 刷新股票数据"""
+    if not tushare_config.enabled:
+        raise HTTPException(status_code=503, detail="TuShare is not enabled")
+
+    tushare_svc = get_tushare_service()
+
+    # 获取实时行情
+    quote = tushare_svc.get_realtime_quote(code)
+    if not quote:
+        raise HTTPException(status_code=404, detail="Failed to get realtime quote")
+
+    # 更新数据库中的股票信息
+    stock = db.query(Stock).filter(Stock.code == code).first()
+    if stock:
+        stock.price = quote.get('price', stock.price)
+        stock.change_percent = quote.get('change_pct', stock.change_percent)
+        stock.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+    return {
+        "success": True,
+        "message": f"Stock {code} data refreshed",
+        "price": quote.get('price'),
+        "change_pct": quote.get('change_pct')
+    }
+
+
+@app.get("/api/tushare/status")
+def get_tushare_status():
+    """获取 TuShare 连接状态"""
+    return {
+        "enabled": tushare_config.enabled,
+        "has_token": bool(tushare_config.token),
+        "status": "connected" if tushare_config.enabled else "disabled"
+    }
 
 
 @app.get("/api/stocks/{code}/factors", response_model=list[FactorScore])

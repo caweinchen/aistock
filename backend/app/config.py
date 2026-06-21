@@ -31,5 +31,11 @@ class AppConfig:
     debug: bool = os.getenv("APP_DEBUG", "false").lower() == "true"
 
 
+class TuShareConfig:
+    token: str = os.getenv("TUSHARE_TOKEN", "")
+    enabled: bool = os.getenv("TUSHARE_ENABLED", "false").lower() == "true"
+
+
 db_config = DatabaseConfig()
 app_config = AppConfig()
+tushare_config = TuShareConfig()
