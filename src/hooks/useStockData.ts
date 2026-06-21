@@ -104,32 +104,7 @@ export function useStockData() {
     if (cached) return cached;
 
     try {
-      // 从已有的策略列表中找到策略
-      const strategy = detail?.strategies.find((s) => s.id === strategyId);
-      const customStrategy = customStrategiesByCode[selectedCode]?.find((s) => s.id === strategyId);
-      const foundStrategy = strategy || customStrategy;
-      
-      if (!foundStrategy) return undefined;
-
-      // 构建模拟的策略详情
-      const strategyDetail: StrategyDetail = {
-        strategy: foundStrategy,
-        annualized_return: foundStrategy.return_rate * 1.5,
-        sharpe_ratio: Math.min(2.5, Math.max(0.5, foundStrategy.return_rate / Math.abs(foundStrategy.max_drawdown))),
-        trade_count: 5,
-        rules: [
-          `${foundStrategy.name} rule 1`,
-          `${foundStrategy.name} rule 2`,
-          `${foundStrategy.name} rule 3`,
-        ],
-        trades: (detail?.history ?? []).slice(0, 5).map((point, i) => ({
-          date: point.date,
-          action: (i % 2 === 0 ? 'buy' : 'sell') as 'buy' | 'sell',
-          price: point.close,
-          quantity: 100,
-          reason: `${foundStrategy.name} signal`,
-        })),
-      };
+      const strategyDetail = await getStrategyDetail(selectedCode, strategyId);
 
       strategyDetailCacheRef.current[cacheKey] = strategyDetail;
       return strategyDetail;
@@ -138,7 +113,7 @@ export function useStockData() {
       setError(t.error[errorKey as keyof typeof t.error] || t.error.fetchStrategy);
       return undefined;
     }
-  }, [selectedCode, detail, customStrategiesByCode, t]);
+  }, [selectedCode, t]);
 
   const createCustomBacktest = useCallback(async (request: BacktestRequest): Promise<StrategyDetail | undefined> => {
     setError(null);
