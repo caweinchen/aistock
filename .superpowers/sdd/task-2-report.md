@@ -21,3 +21,41 @@ Self-review notes:
 - Added `engine_result_to_strategy` and `engine_result_to_detail` to preserve existing FastAPI response model shapes while sourcing values from `BacktestResult`.
 - Replaced mock strategy detail and custom backtest calculations with `run_backtest(...)` results and the brief's `BacktestResult` reshaping for custom IDs/periods.
 - Added `calculate_strategies(...)` in this worktree because the brief referenced it but the function was absent here; wired stock detail and strategy list reads to engine-generated standard summaries while keeping persisted `custom-*` strategies visible.
+
+---
+
+Review fix follow-up:
+
+Files changed:
+- `backend/app/main.py`
+- `backend/tests/test_backtest_engine.py`
+
+Root cause:
+- Persisted custom strategies save ids like `custom-{template}-{lookback_days}-{timestamp}`.
+- `build_strategy_detail(...)` previously passed that id straight into `run_backtest(...)` without `lookback_days`, so `run_backtest(...)` resolved the template from the id string but replayed the full available history.
+- Strategy list/detail/history loading was split across multiple direct `PricePointDB` queries, which made the strategy list endpoint bypass the existing `get_stock_detail(...)` history path.
+
+TDD evidence:
+- Red command:
+  - `python -m unittest backend.tests.test_backtest_engine.BacktestApiConversionTests.test_custom_strategy_detail_reuses_saved_lookback -v`
+- Red output summary:
+  - Failed with `AssertionError: 'Last 120 bars' != 'Last 90 days'`, proving persisted custom detail replayed full history instead of the saved 90-day window.
+
+Implementation summary:
+- Added `parse_custom_strategy_id(...)` to recover `(template, lookback_days)` from persisted custom ids without changing API shapes.
+- Updated `build_strategy_detail(...)` to:
+  - call `run_backtest(...)` with the parsed template and saved `lookback_days` for custom strategies,
+  - preserve the persisted custom strategy id and period in the returned detail payload.
+- Added `get_price_history(...)` and reused it from `get_stock_detail(...)` and `/api/stocks/{code}/history`.
+- Updated `/api/stocks/{code}/strategies` to return `get_stock_detail(db, code).strategies` so strategy calculations reuse the existing stock detail/history loading path.
+- Kept the existing TuShare refresh behavior unchanged because the current refresh endpoint only updates realtime quote fields on `stocks`; it does not populate `price_history`, so adding a new refresh pipeline here would have exceeded the task and app architecture.
+
+Verification:
+- Green command:
+  - `python -m unittest backend.tests.test_backtest_engine.BacktestApiConversionTests.test_custom_strategy_detail_reuses_saved_lookback -v`
+- Green output summary:
+  - Passed.
+- Covering command:
+  - `python -m unittest backend.tests.test_backtest_engine -v`
+- Covering output summary:
+  - Passed all 7 tests.

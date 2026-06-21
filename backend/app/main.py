@@ -244,13 +244,33 @@ def calculate_strategies(daily_data: list) -> list:
     ]
 
 
+def get_price_history(db: Session, code: str) -> list[PricePointDB]:
+    return (
+        db.query(PricePointDB)
+        .filter(PricePointDB.stock_code == code)
+        .order_by(PricePointDB.date)
+        .all()
+    )
+
+
+def parse_custom_strategy_id(strategy_id: str) -> tuple[str, int] | None:
+    if not strategy_id.startswith("custom-"):
+        return None
+
+    try:
+        template, lookback_days, _timestamp = strategy_id[len("custom-") :].rsplit("-", 2)
+        return template, int(lookback_days)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_stock_detail(db: Session, code: str) -> StockDetail:
     stock = db.query(Stock).filter(Stock.code == code).first()
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
     factors = db.query(FactorScoreDB).filter(FactorScoreDB.stock_code == code).all()
-    history = db.query(PricePointDB).filter(PricePointDB.stock_code == code).all()
+    history = get_price_history(db, code)
     alerts = db.query(AlertItemDB).filter(AlertItemDB.stock_code == code).all()
     custom_strategies = db.query(StrategyResultDB).filter(
         StrategyResultDB.stock_code == code,
@@ -333,15 +353,7 @@ def get_stock_detail_api(code: str, db: Session = Depends(get_db)):
 
 @app.get("/api/stocks/{code}/strategies", response_model=list[StrategyResult])
 def get_stock_strategies(code: str, db: Session = Depends(get_db)):
-    history = db.query(PricePointDB).filter(PricePointDB.stock_code == code).all()
-    custom_strategies = db.query(StrategyResultDB).filter(
-        StrategyResultDB.stock_code == code,
-        StrategyResultDB.id.like("custom-%"),
-    ).all()
-    return [
-        StrategyResult(**strategy)
-        for strategy in calculate_strategies(history)
-    ] + [db_strategy_to_model(strategy) for strategy in custom_strategies]
+    return get_stock_detail(db, code).strategies
 
 
 @app.get("/api/stocks/{code}/strategies/{strategy_id}", response_model=StrategyDetail)
@@ -355,7 +367,7 @@ def get_stock_strategy_detail(code: str, strategy_id: str, db: Session = Depends
 
 @app.get("/api/stocks/{code}/history", response_model=list[PricePoint])
 def get_stock_history(code: str, db: Session = Depends(get_db)):
-    history = db.query(PricePointDB).filter(PricePointDB.stock_code == code).all()
+    history = get_price_history(db, code)
     return [db_price_to_model(h) for h in history]
 
 
@@ -449,14 +461,38 @@ def create_backtest(request: BacktestRequest, db: Session = Depends(get_db)) -> 
 
 
 def build_strategy_detail(detail: StockDetail, strategy: StrategyResult) -> StrategyDetail:
+    strategy_id = strategy.id
+    lookback_days = None
+    custom_strategy = parse_custom_strategy_id(strategy.id)
+    if custom_strategy:
+        strategy_id, lookback_days = custom_strategy
+
     result = run_backtest(
-        strategy.id,
+        strategy_id,
         detail.history,
         name=strategy.name,
+        lookback_days=lookback_days,
         risk=strategy.risk,
     )
     if not result:
         raise HTTPException(status_code=400, detail="Insufficient price history for backtest")
+    if custom_strategy:
+        result = BacktestResult(
+            template=result.template,
+            id=strategy.id,
+            name=result.name,
+            period=strategy.period,
+            return_rate=result.return_rate,
+            max_drawdown=result.max_drawdown,
+            win_rate=result.win_rate,
+            risk=result.risk,
+            summary=result.summary,
+            annualized_return=result.annualized_return,
+            sharpe_ratio=result.sharpe_ratio,
+            trade_count=result.trade_count,
+            rules=result.rules,
+            trades=result.trades,
+        )
     return engine_result_to_detail(result)
 
 

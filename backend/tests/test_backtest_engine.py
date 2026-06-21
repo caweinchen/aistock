@@ -1,7 +1,15 @@
 import unittest
 
 from backend.app.backtest_engine import build_strategy_summaries, normalize_price_bars, run_backtest
-from backend.app.main import engine_result_to_detail, engine_result_to_strategy
+from backend.app.main import (
+    PricePoint,
+    StockDetail,
+    StockSummary,
+    StrategyResult,
+    build_strategy_detail,
+    engine_result_to_detail,
+    engine_result_to_strategy,
+)
 
 
 def make_bar(day: int, close: float, volume: int = 1000) -> dict:
@@ -76,6 +84,56 @@ class BacktestApiConversionTests(unittest.TestCase):
         self.assertEqual(detail.strategy.id, "trend-breakout")
         self.assertEqual(detail.trade_count, len(result.trades))
         self.assertEqual(detail.trades[0].action, "buy")
+
+    def test_custom_strategy_detail_reuses_saved_lookback(self):
+        prices = [10 + i * 0.2 for i in range(120)]
+        history = [
+            PricePoint(date=make_bar(i + 1, price)["date"], close=price, volume=1000 + i * 10)
+            for i, price in enumerate(prices)
+        ]
+        detail = StockDetail(
+            stock=StockSummary(
+                code="600519",
+                name="Kweichow Moutai",
+                price=prices[-1],
+                change_percent=1.2,
+                score=80,
+                signal="buy",
+            ),
+            factors=[],
+            strategies=[],
+            alerts=[],
+            history=history,
+            ai_summary="",
+            data_status="normal",
+            updated_at="2024-05-01T00:00:00Z",
+        )
+        strategy = StrategyResult(
+            id="custom-trend-breakout-90-1710000000",
+            name="Saved Breakout",
+            period="Last 90 days",
+            return_rate=0,
+            max_drawdown=0,
+            win_rate=0,
+            risk="medium",
+            summary="",
+        )
+
+        expected = run_backtest(
+            "trend-breakout",
+            history,
+            name=strategy.name,
+            lookback_days=90,
+            risk=strategy.risk,
+        )
+        assert expected is not None
+
+        result = build_strategy_detail(detail, strategy)
+
+        self.assertEqual(result.strategy.id, strategy.id)
+        self.assertEqual(result.strategy.period, strategy.period)
+        self.assertEqual(result.trade_count, expected.trade_count)
+        self.assertEqual(result.annualized_return, expected.annualized_return)
 
 
 if __name__ == "__main__":
