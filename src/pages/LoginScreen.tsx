@@ -3,7 +3,6 @@ import { Globe, Lock, Mail, Server, ShieldCheck } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from '../i18n';
-import { getServerConfig, type ServerConfig } from '../services/storage';
 import type { Locale } from '../i18n/types';
 
 interface LoginScreenProps {
@@ -17,11 +16,12 @@ export function LoginScreen({ onSuccess, onOpenSettings }: LoginScreenProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [serverConfig, setServerConfig] = useState<ServerConfig>({ host: '127.0.0.1', port: 8000 });
 
   useEffect(() => {
-    setServerConfig(getServerConfig());
-  }, []);
+    if (isLoggedIn && onSuccess) {
+      onSuccess();
+    }
+  }, [isLoggedIn, onSuccess]);
 
   const cycleLanguage = () => {
     const locales: Locale[] = ['zh', 'zh-Hant', 'en'];
@@ -47,8 +47,7 @@ export function LoginScreen({ onSuccess, onOpenSettings }: LoginScreenProps) {
     }
   };
 
-  if (isLoggedIn && onSuccess) {
-    onSuccess();
+  if (isLoggedIn) {
     return null;
   }
 
@@ -66,11 +65,6 @@ export function LoginScreen({ onSuccess, onOpenSettings }: LoginScreenProps) {
             <Server size={20} color="#0F8B8D" />
           </Pressable>
         </View>
-      </View>
-
-      <View style={styles.serverInfo}>
-        <Text style={styles.serverLabel}>{t.settings.serverConfig}:</Text>
-        <Text style={styles.serverValue}>http://{serverConfig.host}:{serverConfig.port}</Text>
       </View>
 
       <View style={styles.loginCard}>
@@ -181,18 +175,6 @@ const styles = StyleSheet.create({
   },
   title: { color: '#162033', fontSize: 20, fontWeight: '800' },
   placeholder: { width: 42 },
-  serverInfo: {
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderColor: '#E5E7EB',
-    borderRadius: 8,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 8,
-    padding: 12,
-  },
-  serverLabel: { color: '#6B7280', fontSize: 13 },
-  serverValue: { color: '#0F8B8D', fontSize: 13, fontWeight: '600' },
   loginCard: {
     backgroundColor: '#FFFFFF',
     borderColor: '#E5E7EB',

@@ -29,7 +29,7 @@ export function SettingsScreen({ onBack, onConfigSaved }: SettingsScreenProps) {
     setIsTesting(true);
     setTestResult(null);
     try {
-      const response = await fetch(`http://${host}:${port}/api/stocks`, {
+      const response = await fetch(`http://${host}:${port}/api/health`, {
         method: 'GET',
       });
       setTestResult(response.ok ? 'success' : 'failed');

@@ -42,3 +42,41 @@ def generate_auth_token() -> str:
 
 def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def validate_password_strength(password: str) -> dict:
+    """Validate password strength."""
+    messages = []
+    score = 0
+
+    if len(password) >= 8:
+        score += 1
+    else:
+        messages.append("Password must be at least 8 characters long")
+
+    if any(c.isupper() for c in password):
+        score += 1
+    else:
+        messages.append("Password must contain at least one uppercase letter")
+
+    if any(c.islower() for c in password):
+        score += 1
+    else:
+        messages.append("Password must contain at least one lowercase letter")
+
+    if any(c.isdigit() for c in password):
+        score += 1
+    else:
+        messages.append("Password must contain at least one number")
+
+    special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+    if any(c in special_chars for c in password):
+        score += 1
+    else:
+        messages.append("Password must contain at least one special character (!@#$%^&* etc.)")
+
+    return {
+        "valid": score >= 5,
+        "score": score,
+        "messages": messages if messages else ["Password is strong"]
+    }

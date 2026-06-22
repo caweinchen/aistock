@@ -107,7 +107,7 @@ copy .env.example .env
 ## 下一步
 
 ### 核心功能
-- [ ] 接入真实行情数据（TuShare Pro）
+- [x] 接入真实行情数据（TuShare Pro）
 - [ ] 个股详情页完整回测功能
 - [ ] 自定义策略回测构建器
 

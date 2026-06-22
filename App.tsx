@@ -1,29 +1,42 @@
 import { SafeAreaView, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { I18nProvider } from './src/i18n';
 import { HomeScreen } from './src/pages/HomeScreen';
 import { LoginScreen } from './src/pages/LoginScreen';
 import { SettingsScreen } from './src/pages/SettingsScreen';
 import { ProfileScreen } from './src/pages/ProfileScreen';
+import { StockDetailScreen } from './src/pages/StockDetailScreen';
 import { isLoggedIn as checkLoggedIn, clearAuthToken } from './src/services/storage';
 
-type Screen = 'home' | 'settings' | 'login-settings' | 'profile';
+type Screen = 'home' | 'settings' | 'login-settings' | 'profile' | 'stock-detail';
+
+interface ScreenParams {
+  stockCode?: string;
+}
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
+  const [screenParams, setScreenParams] = useState<ScreenParams>({});
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // 检查登录状态
   useEffect(() => {
     setIsLoggedIn(checkLoggedIn());
   }, []);
 
   const goToSettings = () => setCurrentScreen('settings');
-  const goToHome = () => setCurrentScreen('home');
+  const goToHome = () => {
+    setCurrentScreen('home');
+    setScreenParams({});
+  };
   const goToLoginSettings = () => setCurrentScreen('login-settings');
   const goToProfile = () => setCurrentScreen('profile');
+  
+  const goToStockDetail = (stockCode: string) => {
+    setScreenParams({ stockCode });
+    setCurrentScreen('stock-detail');
+  };
 
   const handleLoginSuccess = () => {
     setIsLoggedIn(true);
@@ -40,7 +53,6 @@ export default function App() {
     setRefreshKey(prev => prev + 1);
   };
 
-  // 未登录显示登录页面或登录设置页面
   if (!isLoggedIn) {
     return (
       <I18nProvider>
@@ -59,7 +71,6 @@ export default function App() {
     );
   }
 
-  // 已登录显示主页面
   const renderScreen = () => {
     switch (currentScreen) {
       case 'profile':
@@ -70,6 +81,13 @@ export default function App() {
         return (
           <SettingsScreen onBack={goToHome} onConfigSaved={handleConfigSaved} />
         );
+      case 'stock-detail':
+        return (
+          <StockDetailScreen
+            stockCode={screenParams.stockCode || ''}
+            onBack={goToHome}
+          />
+        );
       case 'home':
       default:
         return (
@@ -78,6 +96,7 @@ export default function App() {
             onOpenSettings={goToSettings}
             onOpenProfile={goToProfile}
             onLogout={handleLogout}
+            onOpenStockDetail={goToStockDetail}
           />
         );
     }

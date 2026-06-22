@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { ArrowLeft, Check, Globe, Key, RefreshCcw, Server, Shield, User, Wifi, WifiOff } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { useTranslation } from '../i18n';
-import { getStoredUser, getApiBaseUrl, getServerConfig, setServerConfig, type ServerConfig } from '../services/storage';
+import { getStoredUser, getApiBaseUrl, getServerConfig, setServerConfig, getAuthToken, type ServerConfig } from '../services/storage';
 import { clearCache } from '../services/api';
 import type { Locale } from '../i18n/types';
 
@@ -90,14 +90,25 @@ export function ProfileScreen({ onBack, onLogout }: ProfileScreenProps) {
 
     setIsLoading(true);
     try {
+      let encryptedOldPassword = oldPassword;
+      let encryptedNewPassword = newPassword;
+      
+      try {
+        const { encryptPassword } = await import('../utils/crypto');
+        encryptedOldPassword = await encryptPassword(oldPassword);
+        encryptedNewPassword = await encryptPassword(newPassword);
+      } catch (e) {
+        console.warn('Failed to encrypt password, sending as plain text:', e);
+      }
+
       const apiBase = getApiBaseUrl();
       const response = await fetch(`${apiBase}/api/auth/change-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           username,
-          old_password: oldPassword,
-          new_password: newPassword,
+          old_password: encryptedOldPassword,
+          new_password: encryptedNewPassword,
         }),
       });
 
@@ -130,7 +141,12 @@ export function ProfileScreen({ onBack, onLogout }: ProfileScreenProps) {
     setIsTestingServer(true);
     setServerTestResult(null);
     try {
-      const response = await fetch(`http://${serverHost}:${serverPort}/api/stocks`);
+      const token = getAuthToken();
+      const headers: HeadersInit = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      const response = await fetch(`http://${serverHost}:${serverPort}/api/stocks`, { headers });
       setServerTestResult(response.ok ? 'success' : 'failed');
     } catch {
       setServerTestResult('failed');

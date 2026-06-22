@@ -3,8 +3,10 @@ import urllib.parse
 from pathlib import Path
 from dotenv import load_dotenv
 
-# 加载 .env 文件
+# 加载 .env 文件（支持 backend/.env 和项目根目录 .env）
 env_path = Path(__file__).parent / ".env"
+if not env_path.exists():
+    env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(env_path)
 
 

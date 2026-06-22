@@ -16,9 +16,10 @@ interface HomeScreenProps {
   onOpenSettings?: () => void;
   onOpenProfile?: () => void;
   onLogout?: () => void;
+  onOpenStockDetail?: (stockCode: string) => void;
 }
 
-export function HomeScreen({ onOpenSettings, onOpenProfile, onLogout }: HomeScreenProps) {
+export function HomeScreen({ onOpenSettings, onOpenProfile, onLogout, onOpenStockDetail }: HomeScreenProps) {
   const { t, locale, setLocale } = useTranslation();
   const {
     stocks,
@@ -34,6 +35,7 @@ export function HomeScreen({ onOpenSettings, onOpenProfile, onLogout }: HomeScre
     toggleWatchlist,
     loadStrategyDetail,
     createCustomBacktest,
+    refreshWatchlist,
   } = useStockData();
 
   const [isSearchVisible, setIsSearchVisible] = useState(false);
@@ -47,6 +49,7 @@ export function HomeScreen({ onOpenSettings, onOpenProfile, onLogout }: HomeScre
   const [backtestTemplate, setBacktestTemplate] = useState<StrategyTemplate>('trend-breakout');
   const [lookbackDays, setLookbackDays] = useState(180);
   const [isCreatingBacktest, setIsCreatingBacktest] = useState(false);
+  const [isRefreshingWatchlist, setIsRefreshingWatchlist] = useState(false);
   const localeLabel = locale === 'zh' ? '中' : locale === 'zh-Hant' ? '繁' : 'EN';
 
   const selectedStock = detail?.stock ?? stocks.find((stock) => stock.code === selectedCode) ?? stocks[0];
@@ -104,6 +107,20 @@ export function HomeScreen({ onOpenSettings, onOpenProfile, onLogout }: HomeScre
     setUpdatingWatchlistCode(stock.code);
     await toggleWatchlist(stock);
     setUpdatingWatchlistCode(null);
+  };
+
+  const handleRefreshWatchlist = async () => {
+    setIsRefreshingWatchlist(true);
+    await refreshWatchlist();
+    setIsRefreshingWatchlist(false);
+  };
+
+  const handleStockPress = (stockCode: string) => {
+    if (onOpenStockDetail) {
+      onOpenStockDetail(stockCode);
+    } else {
+      void loadStockDetail(stockCode);
+    }
   };
 
   return (
@@ -209,10 +226,15 @@ export function HomeScreen({ onOpenSettings, onOpenProfile, onLogout }: HomeScre
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>{t.stock.watchlist}</Text>
-        <Pressable style={styles.textButton} onPress={() => void loadStocks(searchQuery)}>
-          {isLoadingStocks && <ActivityIndicator size="small" color="#0F8B8D" />}
-          <Text style={styles.textButtonLabel}>{t.common.ok}</Text>
-          <RefreshCcw size={15} color="#0F8B8D" />
+        <Pressable style={styles.textButton} onPress={handleRefreshWatchlist}>
+          {isRefreshingWatchlist ? (
+            <ActivityIndicator size="small" color="#0F8B8D" />
+          ) : (
+            <>
+              <Text style={styles.textButtonLabel}>{t.common.refresh}</Text>
+              <RefreshCcw size={15} color="#0F8B8D" />
+            </>
+          )}
         </Pressable>
       </View>
 
@@ -224,14 +246,14 @@ export function HomeScreen({ onOpenSettings, onOpenProfile, onLogout }: HomeScre
             isSelected={stock.code === selectedCode}
             isUpdatingWatchlist={updatingWatchlistCode === stock.code}
             stock={stock}
-            onPress={() => void loadStockDetail(stock.code)}
+            onPress={() => handleStockPress(stock.code)}
             onToggleWatchlist={() => handleToggleWatchlist(stock)}
           />
         ))}
         {!stocks.length && !isLoadingStocks && <Text style={styles.emptyText}>{t.home.noStocks}</Text>}
       </View>
 
-      {selectedStock && (
+      {selectedStock && !onOpenStockDetail && (
         <View style={styles.currentPanel}>
           <View style={styles.currentHeader}>
             <View>
@@ -251,63 +273,67 @@ export function HomeScreen({ onOpenSettings, onOpenProfile, onLogout }: HomeScre
         </View>
       )}
 
-      {detail?.history?.length && <PriceChart stock={selectedStock} history={detail.history} />}
+      {selectedStock && !onOpenStockDetail && detail?.history?.length && <PriceChart stock={selectedStock} history={detail.history} />}
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{t.factor.title}</Text>
-        <Text style={styles.subtleText}>{selectedStock?.name ?? t.home.notSelected}</Text>
-      </View>
-      <View style={styles.factorGrid}>
-        {isLoadingDetail && <LoadingBlock label={t.home.loadingDetail} />}
-        {detail?.factors.map((factor) => <FactorTile key={factor.key} factor={factor} />)}
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{t.strategy.title}</Text>
-        <Pressable style={styles.textButton} onPress={() => setIsBuilderOpen((v) => !v)}>
-          <Text style={styles.textButtonLabel}>{t.backtest.title}</Text>
-          <ChevronRight size={16} color="#0F8B8D" />
-        </Pressable>
-      </View>
-      {isBuilderOpen && (
-        <BacktestBuilder
-          isCreating={isCreatingBacktest}
-          lookbackDays={lookbackDays}
-          name={backtestName}
-          template={backtestTemplate}
-          onChangeLookbackDays={setLookbackDays}
-          onChangeName={setBacktestName}
-          onChangeTemplate={setBacktestTemplate}
-          onCreate={handleCreateBacktest}
-        />
-      )}
-      {displayedStrategies.map((strategy) => (
-        <StrategyCard
-          key={strategy.id}
-          detail={selectedCode ? (strategyDetails[`${selectedCode}:${strategy.id}`] as never) : undefined}
-          isExpanded={expandedStrategyId === strategy.id}
-          isLoading={loadingStrategyId === strategy.id}
-          strategy={strategy}
-          onPress={() => handleLoadStrategyDetail(strategy.id)}
-        />
-      ))}
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{t.home.riskAlertSection}</Text>
-        <Text style={styles.subtleText}>{detail?.updated_at ? formatUpdatedAt(detail.updated_at, locale === 'zh' ? 'zh-CN' : locale === 'zh-Hant' ? 'zh-TW' : 'en-US', t.formatter.updated) : ''}</Text>
-      </View>
-      {detail?.alerts.length ? (
-        detail.alerts.map((alert) => <AlertCard key={`${alert.level}-${alert.title}`} alert={alert} />)
-      ) : (
-        <View style={styles.warningPanel}>
-          <View style={styles.warningIcon}>
-            <AlertTriangle size={20} color="#B45309" />
+      {!onOpenStockDetail && (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t.factor.title}</Text>
+            <Text style={styles.subtleText}>{selectedStock?.name ?? t.home.notSelected}</Text>
           </View>
-          <View style={styles.warningCopy}>
-            <Text style={styles.warningTitle}>{t.home.warningTitle}</Text>
-            <Text style={styles.warningText}>{t.home.warningText}</Text>
+          <View style={styles.factorGrid}>
+            {isLoadingDetail && <LoadingBlock label={t.home.loadingDetail} />}
+            {detail?.factors.map((factor) => <FactorTile key={factor.key} factor={factor} />)}
           </View>
-        </View>
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t.strategy.title}</Text>
+            <Pressable style={styles.textButton} onPress={() => setIsBuilderOpen((v) => !v)}>
+              <Text style={styles.textButtonLabel}>{t.backtest.title}</Text>
+              <ChevronRight size={16} color="#0F8B8D" />
+            </Pressable>
+          </View>
+          {isBuilderOpen && (
+            <BacktestBuilder
+              isCreating={isCreatingBacktest}
+              lookbackDays={lookbackDays}
+              name={backtestName}
+              template={backtestTemplate}
+              onChangeLookbackDays={setLookbackDays}
+              onChangeName={setBacktestName}
+              onChangeTemplate={setBacktestTemplate}
+              onCreate={handleCreateBacktest}
+            />
+          )}
+          {displayedStrategies.map((strategy) => (
+            <StrategyCard
+              key={strategy.id}
+              detail={selectedCode ? (strategyDetails[`${selectedCode}:${strategy.id}`] as never) : undefined}
+              isExpanded={expandedStrategyId === strategy.id}
+              isLoading={loadingStrategyId === strategy.id}
+              strategy={strategy}
+              onPress={() => handleLoadStrategyDetail(strategy.id)}
+            />
+          ))}
+
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{t.home.riskAlertSection}</Text>
+            <Text style={styles.subtleText}>{detail?.updated_at ? formatUpdatedAt(detail.updated_at, locale === 'zh' ? 'zh-CN' : locale === 'zh-Hant' ? 'zh-TW' : 'en-US', t.formatter.updated) : ''}</Text>
+          </View>
+          {detail?.alerts.length ? (
+            detail.alerts.map((alert) => <AlertCard key={`${alert.level}-${alert.title}`} alert={alert} />)
+          ) : (
+            <View style={styles.warningPanel}>
+              <View style={styles.warningIcon}>
+                <AlertTriangle size={20} color="#B45309" />
+              </View>
+              <View style={styles.warningCopy}>
+                <Text style={styles.warningTitle}>{t.home.warningTitle}</Text>
+                <Text style={styles.warningText}>{t.home.warningText}</Text>
+              </View>
+            </View>
+          )}
+        </>
       )}
     </ScrollView>
   );

@@ -69,6 +69,36 @@ export interface StockDetail {
   updated_at: string;
 }
 
+export interface DividendRecord {
+  ts_code: string;
+  div_proc: string;
+  ann_date: string;
+  record_date: string;
+  ex_date: string;
+  pay_date: string;
+  div_cash: number;
+  bonus_share: number;
+  transfer_share: number;
+}
+
+export interface StockNews {
+  ts_code: string;
+  title: string;
+  content: string;
+  pub_time: string;
+  source: string;
+}
+
+export interface InstHoldRecord {
+  ts_code: string;
+  trade_date: string;
+  inst_type: string;
+  hold_amount: number;
+  hold_ratio: number;
+  change_amount: number;
+  change_ratio: number;
+}
+
 export interface BacktestRequest {
   code: string;
   name: string;

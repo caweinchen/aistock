@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StockSummary, StockDetail, StrategyDetail, StrategyResult, BacktestRequest } from '../types';
-import { getStocks, searchStocks, getStockDetail, addToWatchlist, removeFromWatchlist, getStrategyDetail, createBacktest } from '../services/api';
+import { getStocks, searchStocks, getStockDetail, addToWatchlist, removeFromWatchlist, getStrategyDetail, createBacktest, refreshAllStocks } from '../services/api';
 import { useTranslation } from '../i18n';
 
 export function useStockData() {
@@ -132,6 +132,26 @@ export function useStockData() {
     }
   }, [t]);
 
+  const refreshWatchlist = useCallback(async () => {
+    setIsLoadingStocks(true);
+    setError(null);
+
+    try {
+      const payload = await refreshAllStocks();
+      setStocks(payload);
+      setWatchlistCodes(new Set(payload.map((stock) => stock.code)));
+      
+      if (selectedCodeRef.current) {
+        await loadStockDetail(selectedCodeRef.current);
+      }
+    } catch (err) {
+      const errorKey = err instanceof Error ? err.message : 'refreshAllStocks';
+      setError(t.error[errorKey as keyof typeof t.error] || t.error.refreshAllStocks);
+    } finally {
+      setIsLoadingStocks(false);
+    }
+  }, [loadStockDetail, t]);
+
   useEffect(() => {
     void loadStocks();
   }, [loadStocks]);
@@ -150,6 +170,7 @@ export function useStockData() {
     toggleWatchlist,
     loadStrategyDetail,
     createCustomBacktest,
+    refreshWatchlist,
     setError,
   };
 }

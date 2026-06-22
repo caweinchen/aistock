@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { ChevronDown, ChevronUp, LineChart, ShieldCheck } from 'lucide-react-native';
 import type { StrategyDetail, StrategyResult } from '../types';
 import { formatPercent, getRiskColor } from '../utils/formatters';
-import { useTranslateRisk, useTranslateAction, useTranslation } from '../i18n';
+import { useTranslateRisk, useTranslateStrategyName, useTranslation } from '../i18n';
 
 interface StrategyCardProps {
   strategy: StrategyResult;
@@ -17,13 +17,14 @@ export function StrategyCard({ strategy, detail, isExpanded, isLoading, onPress 
   const riskColor = getRiskColor(strategy.risk);
   const progressWidth = `${Math.max(8, Math.min(100, strategy.win_rate))}%` as const;
   const translatedRisk = useTranslateRisk(strategy.risk);
+  const translatedName = useTranslateStrategyName(strategy.name);
 
   return (
     <Pressable style={({ pressed }) => [styles.strategyCard, pressed && styles.strategyCardPressed]} onPress={onPress}>
       <View style={styles.strategyHeader}>
         <View style={styles.strategyTitleLine}>
           <LineChart size={20} color="#162033" />
-          <Text style={styles.strategyName}>{strategy.name}</Text>
+          <Text style={styles.strategyName}>{translatedName}</Text>
         </View>
         <View style={[styles.riskBadge, { backgroundColor: `${riskColor}1A` }]}>
           <ShieldCheck size={14} color={riskColor} />
@@ -72,40 +73,87 @@ function StrategyDetailPanel({ detail }: { detail?: StrategyDetail }) {
     );
   }
 
+  const ruleMap: Record<string, keyof typeof t.strategy> = {
+    'Buy when close crosses above the 20-day moving average.': 'ruleTrendBreakout1',
+    'Sell when close falls below the 20-day moving average or stop-loss is triggered.': 'ruleTrendBreakout2',
+    'Volume expansion strengthens the breakout reason when available.': 'ruleTrendBreakout3',
+    'Buy when price recovers from the recent low range.': 'ruleLowValuation1',
+    'Sell when price reverts toward the recent high range or stop-loss is triggered.': 'ruleLowValuation2',
+    'Use recent price range as a valuation proxy until valuation data is available.': 'ruleLowValuation3',
+    'Buy only when trend is stable and realized volatility is moderate.': 'ruleDividend1',
+    'Sell when trend weakens, volatility rises, or stop-loss is triggered.': 'ruleDividend2',
+    'Use defensive price behavior as a dividend proxy until dividend data is available.': 'ruleDividend3',
+  };
+
+  const reasonMap: Record<string, keyof typeof t.strategy> = {
+    'Close crossed above the 20-day moving average.': 'reasonCrossAbove',
+    'Close fell below the 20-day moving average or stop-loss was hit.': 'reasonCrossBelow',
+    'Price recovered from the recent low range.': 'reasonRecoverLow',
+    'Price reverted toward the recent high range or stop-loss was hit.': 'reasonRevertHigh',
+    'Trend was stable with moderate realized volatility.': 'reasonStableTrend',
+    'Trend weakened, volatility rose, or stop-loss was hit.': 'reasonTrendWeak',
+    'Closing position at backtest end.': 'reasonClosePosition',
+  };
+
+  const translateRule = (rule: string) => {
+    const key = ruleMap[rule];
+    return key ? t.strategy[key] : rule;
+  };
+
+  const translateAction = (action: string) => {
+    return t.action[action as keyof typeof t.action] || action;
+  };
+
+  const translateReason = (reason: string) => {
+    const key = reasonMap[reason];
+    return key ? t.strategy[key] : reason;
+  };
+
+  const rules = detail.rules || [];
+  const trades = detail.trades || [];
+
   return (
     <View style={styles.strategyDetailPanel}>
       <View style={styles.strategyDetailStats}>
-        <Metric label={t.strategy.annualizedReturn} value={formatPercent(detail.annualized_return)} suffix="" />
-        <Metric label={t.strategy.sharpeRatio} value={detail.sharpe_ratio.toFixed(2)} suffix="" />
-        <Metric label={t.strategy.tradeCount} value={String(detail.trade_count)} suffix="" />
+        <Metric label={t.strategy.annualizedReturn} value={formatPercent(detail.annualized_return || 0)} suffix="" />
+        <Metric label={t.strategy.sharpeRatio} value={(detail.sharpe_ratio || 0).toFixed(2)} suffix="" />
+        <Metric label={t.strategy.tradeCount} value={String(detail.trade_count || 0)} suffix="" />
       </View>
-      <View style={styles.ruleList}>
-        {detail.rules.map((rule) => (
-          <View key={rule} style={styles.ruleItem}>
-            <View style={styles.ruleDot} />
-            <Text style={styles.ruleText}>{rule}</Text>
-          </View>
-        ))}
-      </View>
-      <View style={styles.tradeList}>
-        {detail.trades.map((trade) => {
-          const translatedAction = useTranslateAction(trade.action);
-          return (
-            <View key={`${trade.date}-${trade.action}-${trade.price}`} style={styles.tradeRow}>
-              <View>
-                <Text style={styles.tradeDate}>{trade.date}</Text>
-                <Text style={styles.tradeReason}>{trade.reason}</Text>
+      {rules.length > 0 && (
+        <View style={styles.ruleList}>
+          {rules.map((rule, index) => {
+            const translatedRule = translateRule(rule);
+            return (
+              <View key={index} style={styles.ruleItem}>
+                <View style={styles.ruleDot} />
+                <Text style={styles.ruleText}>{translatedRule}</Text>
               </View>
-              <View style={styles.tradeActionBlock}>
-                <Text style={[styles.tradeAction, { color: trade.action === 'buy' ? '#0F8B8D' : '#DC2626' }]}>
-                  {translatedAction}
-                </Text>
-                <Text style={styles.tradePrice}>{trade.price.toFixed(2)}</Text>
+            );
+          })}
+        </View>
+      )}
+      {trades.length > 0 && (
+        <View style={styles.tradeList}>
+          {trades.map((trade) => {
+            const translatedAction = translateAction(trade.action);
+            const translatedReason = translateReason(trade.reason);
+            return (
+              <View key={`${trade.date}-${trade.action}-${trade.price}`} style={styles.tradeRow}>
+                <View>
+                  <Text style={styles.tradeDate}>{trade.date}</Text>
+                  <Text style={styles.tradeReason}>{translatedReason}</Text>
+                </View>
+                <View style={styles.tradeActionBlock}>
+                  <Text style={[styles.tradeAction, { color: trade.action === 'buy' ? '#0F8B8D' : '#DC2626' }]}>
+                    {translatedAction}
+                  </Text>
+                  <Text style={styles.tradePrice}>{(trade.price || 0).toFixed(2)}</Text>
+                </View>
               </View>
-            </View>
-          );
-        })}
-      </View>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }

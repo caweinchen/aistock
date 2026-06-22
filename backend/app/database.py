@@ -1,14 +1,27 @@
-from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, ForeignKey, Text, UniqueConstraint
+from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, ForeignKey, Text, UniqueConstraint, inspect, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime, timezone
 from backend.app.config import db_config
-from backend.app.security import hash_password, is_password_hash
+from backend.app.security import hash_password, is_password_hash, verify_password, validate_password_strength
 
 engine = create_engine(db_config.url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
+
+REQUIRED_SCHEMA_COLUMNS = {
+    "stocks": {
+        "english_name": "english_name VARCHAR(100) DEFAULT ''",
+        "ts_code": "ts_code VARCHAR(20) DEFAULT ''",
+        "market": "market VARCHAR(10) DEFAULT ''",
+    },
+    "price_history": {
+        "open": "open FLOAT DEFAULT 0",
+        "high": "high FLOAT DEFAULT 0",
+        "low": "low FLOAT DEFAULT 0",
+    },
+}
 
 
 class User(Base):
@@ -50,10 +63,13 @@ class Stock(Base):
 
     code = Column(String(20), primary_key=True, index=True)
     name = Column(String(100), nullable=False)
-    price = Column(Float, nullable=False)
-    change_percent = Column(Float, nullable=False)
-    score = Column(Integer, nullable=False)
-    signal = Column(String(20), nullable=False)
+    english_name = Column(String(100), default="")
+    ts_code = Column(String(20), default="")  # 通联数据格式: 000001.SZ
+    market = Column(String(10), default="")   # SH/SZ
+    price = Column(Float, nullable=False, default=0)
+    change_percent = Column(Float, nullable=False, default=0)
+    score = Column(Integer, nullable=False, default=50)
+    signal = Column(String(20), nullable=False, default="neutral")
     ai_summary = Column(Text)
     data_status = Column(String(20), default="normal")
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -90,6 +106,9 @@ class PricePointDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     stock_code = Column(String(20), ForeignKey("stocks.code"))
     date = Column(String(20), nullable=False)
+    open = Column(Float, default=0)
+    high = Column(Float, default=0)
+    low = Column(Float, default=0)
     close = Column(Float, nullable=False)
     volume = Column(Integer)
 
@@ -106,6 +125,27 @@ class AlertItemDB(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    ensure_schema_columns()
+
+
+def _missing_columns(existing_columns: set[str], required_columns: dict[str, str]) -> dict[str, str]:
+    return {
+        column_name: ddl
+        for column_name, ddl in required_columns.items()
+        if column_name not in existing_columns
+    }
+
+
+def ensure_schema_columns():
+    inspector = inspect(engine)
+    existing_tables = set(inspector.get_table_names())
+    with engine.begin() as connection:
+        for table_name, required_columns in REQUIRED_SCHEMA_COLUMNS.items():
+            if table_name not in existing_tables:
+                continue
+            existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+            for ddl in _missing_columns(existing_columns, required_columns).values():
+                connection.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {ddl}"))
 
 
 def get_db():
@@ -121,25 +161,26 @@ def init_sample_data(db):
 
     stocks_data = {
         "600519": {
-            "name": "Kweichow Moutai",
+            "name": "贵州茅台",
+            "english_name": "Kweichow Moutai",
             "price": 1563.0,
             "change_percent": 1.28,
             "score": 82,
             "signal": "buy",
-            "ai_summary": "Comprehensive analysis shows that the stock has strong fundamentals, healthy capital flow, and moderate valuation. It is recommended to hold with appropriate position control.",
+            "ai_summary": "综合分析显示，该股票基本面强劲，资金流向健康，估值适中。建议持仓观望，适当控制仓位。",
             "data_status": "normal",
             "factors": [
-                {"key": "capital_flow", "label": "Capital Flow", "value": 72, "description": "Main capital inflow in recent 5 days."},
-                {"key": "valuation", "label": "Valuation", "value": 64, "description": "Valuation is in the upper-middle area of the sector."},
-                {"key": "momentum", "label": "Momentum", "value": 81, "description": "Price trend is better than 300 peers."},
-                {"key": "volatility", "label": "Volatility", "value": 39, "description": "Short-term volatility is controllable."},
+                {"key": "capital_flow", "label": "资金流向", "value": 72, "description": "近5日主力资金净流入。"},
+                {"key": "valuation", "label": "估值水平", "value": 64, "description": "估值处于行业中上水平。"},
+                {"key": "momentum", "label": "动量指标", "value": 81, "description": "价格走势优于300只同类股票。"},
+                {"key": "volatility", "label": "波动性", "value": 39, "description": "短期波动性可控。"},
             ],
             "strategies": [
-                {"id": "trend-breakout", "name": "Trend Breakout", "period": "Last 180 days", "return_rate": 12.6, "max_drawdown": -6.4, "win_rate": 57.0, "risk": "medium", "summary": "Trend pattern is established, wait for confirmation, do not chase high."},
-                {"id": "low-valuation-reversal", "name": "Low Valuation Reversal", "period": "Last 1 year", "return_rate": 8.9, "max_drawdown": -4.1, "win_rate": 54.0, "risk": "low", "summary": "Undervalued characteristics are strong, confidence is stable."},
+                {"id": "trend-breakout", "name": "趋势突破", "period": "近180天", "return_rate": 12.6, "max_drawdown": -6.4, "win_rate": 57.0, "risk": "medium", "summary": "趋势形态已形成，等待确认信号，不追高。"},
+                {"id": "low-valuation-reversal", "name": "低估值反转", "period": "近1年", "return_rate": 8.9, "max_drawdown": -4.1, "win_rate": 54.0, "risk": "low", "summary": "低估特征明显，信心稳固。"},
             ],
             "alerts": [
-                {"level": "medium", "title": "Valuation Warning", "message": "Current PE is 38.5x, higher than historical average."},
+                {"level": "medium", "title": "估值提醒", "message": "当前市盈率38.5倍，高于历史平均水平。"},
             ],
             "history": [
                 {"date": "2024-01-02", "close": 1450.0, "volume": 2340000},
@@ -155,22 +196,23 @@ def init_sample_data(db):
             ],
         },
         "000858": {
-            "name": "Wuliangye",
+            "name": "五粮液",
+            "english_name": "Wuliangye",
             "price": 168.5,
             "change_percent": -0.85,
             "score": 76,
             "signal": "neutral",
-            "ai_summary": "The stock shows stable fundamentals with moderate growth potential. It is suitable for medium- to long-term investment with attention to market fluctuations.",
+            "ai_summary": "该股票基本面稳定，具有适度增长潜力。适合中长期投资，关注市场波动。",
             "data_status": "normal",
             "factors": [
-                {"key": "capital_flow", "label": "Capital Flow", "value": 58, "description": "Capital flow is stable."},
-                {"key": "valuation", "label": "Valuation", "value": 52, "description": "Valuation is at a reasonable level."},
-                {"key": "momentum", "label": "Momentum", "value": 68, "description": "Moderate upward momentum."},
-                {"key": "volatility", "label": "Volatility", "value": 45, "description": "Acceptable volatility."},
+                {"key": "capital_flow", "label": "资金流向", "value": 58, "description": "资金流向稳定。"},
+                {"key": "valuation", "label": "估值水平", "value": 52, "description": "估值处于合理水平。"},
+                {"key": "momentum", "label": "动量指标", "value": 68, "description": "温和上涨动能。"},
+                {"key": "volatility", "label": "波动性", "value": 45, "description": "波动在可接受范围内。"},
             ],
             "strategies": [
-                {"id": "trend-breakout", "name": "Trend Breakout", "period": "Last 180 days", "return_rate": 8.2, "max_drawdown": -5.8, "win_rate": 52.0, "risk": "medium", "summary": "Sideways consolidation phase, waiting for directional breakthrough."},
-                {"id": "low-valuation-reversal", "name": "Low Valuation Reversal", "period": "Last 1 year", "return_rate": 6.5, "max_drawdown": -3.9, "win_rate": 51.0, "risk": "low", "summary": "Valuation advantage exists, suitable for bargain hunting."},
+                {"id": "trend-breakout", "name": "趋势突破", "period": "近180天", "return_rate": 8.2, "max_drawdown": -5.8, "win_rate": 52.0, "risk": "medium", "summary": "横盘整理阶段，等待方向性突破。"},
+                {"id": "low-valuation-reversal", "name": "低估值反转", "period": "近1年", "return_rate": 6.5, "max_drawdown": -3.9, "win_rate": 51.0, "risk": "low", "summary": "估值优势存在，适合逢低吸纳。"},
             ],
             "alerts": [],
             "history": [
@@ -187,22 +229,23 @@ def init_sample_data(db):
             ],
         },
         "601318": {
-            "name": "Ping An",
+            "name": "中国平安",
+            "english_name": "Ping An",
             "price": 48.2,
             "change_percent": 2.15,
             "score": 68,
             "signal": "buy",
-            "ai_summary": "Financial sector leader with solid fundamentals. Current price presents a good entry opportunity.",
+            "ai_summary": "金融板块龙头企业，基本面稳健。当前价格具有良好的入场机会。",
             "data_status": "normal",
             "factors": [
-                {"key": "capital_flow", "label": "Capital Flow", "value": 75, "description": "Strong capital inflow recently."},
-                {"key": "valuation", "label": "Valuation", "value": 48, "description": "Significantly undervalued."},
-                {"key": "momentum", "label": "Momentum", "value": 72, "description": "Upward momentum is strong."},
-                {"key": "volatility", "label": "Volatility", "value": 55, "description": "Moderate volatility."},
+                {"key": "capital_flow", "label": "资金流向", "value": 75, "description": "近期资金大幅净流入。"},
+                {"key": "valuation", "label": "估值水平", "value": 48, "description": "估值明显偏低。"},
+                {"key": "momentum", "label": "动量指标", "value": 72, "description": "上涨动能强劲。"},
+                {"key": "volatility", "label": "波动性", "value": 55, "description": "波动适中。"},
             ],
             "strategies": [
-                {"id": "trend-breakout", "name": "Trend Breakout", "period": "Last 180 days", "return_rate": 15.3, "max_drawdown": -8.2, "win_rate": 59.0, "risk": "medium", "summary": "Breaking out from consolidation pattern."},
-                {"id": "dividend-defense", "name": "Dividend Defense", "period": "Last 1 year", "return_rate": 9.8, "max_drawdown": -4.5, "win_rate": 56.0, "risk": "low", "summary": "Stable dividend with attractive yield."},
+                {"id": "trend-breakout", "name": "趋势突破", "period": "近180天", "return_rate": 15.3, "max_drawdown": -8.2, "win_rate": 59.0, "risk": "medium", "summary": "突破盘整格局。"},
+                {"id": "dividend-defense", "name": "分红防御", "period": "近1年", "return_rate": 9.8, "max_drawdown": -4.5, "win_rate": 56.0, "risk": "low", "summary": "分红稳定，收益率有吸引力。"},
             ],
             "alerts": [],
             "history": [
@@ -219,12 +262,13 @@ def init_sample_data(db):
             ],
         },
         "000001": {
-            "name": "Ping An Bank",
+            "name": "平安银行",
+            "english_name": "Ping An Bank",
             "price": 12.5,
             "change_percent": -1.23,
             "score": 58,
             "signal": "neutral",
-            "ai_summary": "Bank sector showing stable performance. Credit quality concerns remain.",
+            "ai_summary": "银行业基本面稳定，资产质量可控。信用卡业务增长强劲。",
             "data_status": "normal",
             "factors": [
                 {"key": "capital_flow", "label": "Capital Flow", "value": 42, "description": "Mixed capital flow."},
@@ -252,12 +296,13 @@ def init_sample_data(db):
             ],
         },
         "600036": {
-            "name": "China Merchants Bank",
+            "name": "招商银行",
+            "english_name": "China Merchants Bank",
             "price": 35.8,
             "change_percent": 0.75,
             "score": 74,
             "signal": "buy",
-            "ai_summary": "Leading retail bank with strong fundamentals. Digital transformation progressing well.",
+            "ai_summary": "零售银行业龙头，基本面稳健。数字化转型进展顺利。",
             "data_status": "normal",
             "factors": [
                 {"key": "capital_flow", "label": "Capital Flow", "value": 68, "description": "Strong institutional interest."},
@@ -292,6 +337,7 @@ def init_sample_data(db):
             stock = Stock(
                 code=code,
                 name=detail["name"],
+                english_name=detail.get("english_name", ""),
                 price=detail["price"],
                 change_percent=detail["change_percent"],
                 score=detail["score"],
@@ -369,19 +415,26 @@ def init_sample_data(db):
                 )
                 db.add(al)
 
-    # 插入用户数据
+    # 插入用户数据 - 所有密码必须符合强密码要求（长度≥8、包含大小写字母、数字和特殊字符）
     users = [
-        ("admin", "admin123"),
-        ("demo", "demo123"),
-        ("user", "user123"),
+        ("admin", "Test@bcd!234"),
+        ("demo", "Demo@123!"),
+        ("user", "User@456!"),
     ]
     for username, password in users:
+        password_validation = validate_password_strength(password)
+        if not password_validation["valid"]:
+            raise ValueError(f"Password for user '{username}' does not meet strength requirements: {', '.join(password_validation['messages'])}")
+        
         existing_user = db.query(User).filter(User.username == username).first()
         if not existing_user:
             user = User(username=username, password=hash_password(password))
             db.add(user)
         elif not is_password_hash(existing_user.password):
-            existing_user.password = hash_password(existing_user.password)
+            existing_user.password = hash_password(password)
+            existing_user.updated_at = datetime.now(timezone.utc)
+        elif not verify_password(password, existing_user.password):
+            existing_user.password = hash_password(password)
             existing_user.updated_at = datetime.now(timezone.utc)
 
     db.commit()
