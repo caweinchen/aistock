@@ -21,6 +21,10 @@ if not logger.handlers:
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from backend.app.database import init_db, get_db, init_sample_data, AuthSession, User, WatchlistItem, Stock, FactorScoreDB, StrategyResultDB, PricePointDB, AlertItemDB
 from backend.app.security import generate_auth_token, hash_password, hash_token, is_password_hash, verify_password, validate_password_strength
 from backend.app.tushare_service import init_tushare, get_tushare_service

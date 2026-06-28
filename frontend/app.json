@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "AIStock",
+    "slug": "aistock",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "description": "AIStock is a mobile stock analysis and research tool for personal quantitative investment decisions.",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "com.aistock.mobile",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.aistock.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "18187cb7-a869-44b4-8130-7dc4c8c2939e"
+      }
+    }
+  }
+}
