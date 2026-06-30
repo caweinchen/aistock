@@ -19,8 +19,12 @@ export async function fetchPublicKey(): Promise<string> {
     throw new Error('Failed to fetch public key');
   }
   const data = await response.json();
-  publicKey = data.public_key;
-  return publicKey;
+  const nextPublicKey = typeof data.public_key === 'string' ? data.public_key : null;
+  if (!nextPublicKey) {
+    throw new Error('Invalid public key');
+  }
+  publicKey = nextPublicKey;
+  return nextPublicKey;
 }
 
 function importPublicKey(pemKey: string): Promise<CryptoKey> {

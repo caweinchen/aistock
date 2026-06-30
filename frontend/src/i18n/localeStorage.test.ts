@@ -1,31 +1,31 @@
 import { getStoredLocale, saveStoredLocale } from './localeStorage';
-
-function assertDoesNotThrow(label: string, fn: () => void) {
-  try {
-    fn();
-  } catch (error) {
-    throw new Error(`${label} threw: ${String(error)}`);
-  }
-}
+import { afterEach, describe, expect, it } from 'vitest';
 
 const originalWindow = globalThis.window;
 
-Object.defineProperty(globalThis, 'window', {
-  configurable: true,
-  value: {},
-});
+describe('localeStorage', () => {
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: originalWindow,
+    });
+  });
 
-assertDoesNotThrow('getStoredLocale without localStorage', () => {
-  if (getStoredLocale() !== null) {
-    throw new Error('expected no stored locale');
-  }
-});
+  it('returns null without localStorage', () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {},
+    });
 
-assertDoesNotThrow('saveStoredLocale without localStorage', () => {
-  saveStoredLocale('en');
-});
+    expect(getStoredLocale()).toBeNull();
+  });
 
-Object.defineProperty(globalThis, 'window', {
-  configurable: true,
-  value: originalWindow,
+  it('ignores save without localStorage', () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {},
+    });
+
+    expect(() => saveStoredLocale('en')).not.toThrow();
+  });
 });

@@ -236,9 +236,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
   },
-  chartContainer: {
-    cursor: 'crosshair',
-  },
+  chartContainer: {},
   dateRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

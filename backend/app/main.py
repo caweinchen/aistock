@@ -25,13 +25,13 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from backend.app.database import init_db, get_db, init_sample_data, AuthSession, User, WatchlistItem, Stock, FactorScoreDB, StrategyResultDB, PricePointDB, AlertItemDB
-from backend.app.security import generate_auth_token, hash_password, hash_token, is_password_hash, verify_password, validate_password_strength
-from backend.app.tushare_service import init_tushare, get_tushare_service
-from backend.app.eastmoney_service import init_eastmoney, get_eastmoney_service
-from backend.app.config import tushare_config
-from backend.app.backtest_engine import BacktestResult, build_strategy_summaries, run_backtest
-from backend.app.rsa_utils import get_rsa_utils
+from app.database import init_db, get_db, init_sample_data, AuthSession, User, WatchlistItem, Stock, FactorScoreDB, StrategyResultDB, PricePointDB, AlertItemDB
+from app.security import generate_auth_token, hash_password, hash_token, is_password_hash, verify_password, validate_password_strength
+from app.tushare_service import init_tushare, get_tushare_service
+from app.eastmoney_service import init_eastmoney, get_eastmoney_service
+from app.config import tushare_config
+from app.backtest_engine import BacktestResult, build_strategy_summaries, run_backtest
+from app.rsa_utils import get_rsa_utils
 
 Signal = Literal["neutral", "buy", "sell"]
 RiskLevel = Literal["low", "medium", "high"]
@@ -471,14 +471,20 @@ def get_watchlist_user(db: Session, username: str = "admin") -> User:
 
 @app.get("/api/stocks", response_model=list[StockSummary])
 def get_stocks(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """获取当前用户的自选股列表"""
     try:
-        stocks = db.query(Stock).all()
-        if not stocks:
-            logger.info("Stock table empty; initializing sample data")
-            init_sample_data(db)
-            stocks = db.query(Stock).all()
-
-        codes = [s.code for s in stocks]
+        # 获取用户的自选股代码
+        watchlist_items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).all()
+        codes = [item.stock_code for item in watchlist_items]
+        
+        if not codes:
+            logger.info(f"User [{user.username}] has no watchlist items")
+            return []
+        
+        # 查询自选股详情
+        stocks = db.query(Stock).filter(Stock.code.in_(codes)).all()
+        
+        # 尝试更新实时行情
         if codes:
             try:
                 eastmoney = get_eastmoney_service()
@@ -491,31 +497,33 @@ def get_stocks(db: Session = Depends(get_db), user: User = Depends(get_current_u
                             stock.change_percent = quote.get('change_percent', 0)
                             stock.updated_at = datetime.now(timezone.utc)
                     db.commit()
-                    logger.info(f"Updated realtime quotes: {len(quotes)} stocks")
+                    logger.info(f"Updated realtime quotes for user [{user.username}]: {len(quotes)} stocks")
             except Exception as e:
                 logger.error(f"Failed to update realtime quotes: {e}")
                 db.rollback()
 
-        logger.info(f"Loaded stock list: {len(stocks)} stocks")
+        logger.info(f"Loaded watchlist for user [{user.username}]: {len(stocks)} stocks")
         return [stock_to_summary(s) for s in stocks]
     except Exception as e:
-        logger.error(f"Failed to load stock list: {e}")
+        logger.error(f"Failed to load watchlist for user [{user.username}]: {e}")
         raise HTTPException(status_code=500, detail="Failed to load stock list")
 
 
 @app.get("/api/stocks/refresh-all", response_model=list[StockSummary])
 def refresh_all_stocks(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """批量刷新所有自选股的实时数据并保存到数据库"""
-    logger.info("Starting batch refresh for all stocks")
+    """批量刷新当前用户所有自选股的实时数据并保存到数据库"""
+    logger.info(f"Starting batch refresh for user [{user.username}]")
     
     try:
-        stocks = db.query(Stock).all()
-        if not stocks:
-            logger.warning("No stocks found in database")
+        # 获取用户的自选股代码
+        watchlist_items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).all()
+        codes = [item.stock_code for item in watchlist_items]
+        
+        if not codes:
+            logger.info(f"User [{user.username}] has no watchlist items to refresh")
             return []
 
-        codes = [s.code for s in stocks]
-        logger.info(f"Refreshing {len(codes)} stocks")
+        logger.info(f"Refreshing {len(codes)} stocks for user [{user.username}]")
 
         eastmoney = get_eastmoney_service()
         quotes = eastmoney.get_realtime_quote(codes)
@@ -535,24 +543,27 @@ def refresh_all_stocks(db: Session = Depends(get_db), user: User = Depends(get_c
                     logger.debug(f"Updated {code}: {old_price} -> {stock.price}")
             
             db.commit()
-            logger.info(f"Successfully refreshed {updated_count}/{len(quotes)} stocks")
+            logger.info(f"Successfully refreshed {updated_count}/{len(quotes)} stocks for user [{user.username}]")
         else:
             logger.warning("No quotes received from EastMoney")
 
-        updated_stocks = db.query(Stock).all()
+        # 返回用户自选股列表
+        updated_stocks = db.query(Stock).filter(Stock.code.in_(codes)).all()
         return [stock_to_summary(s) for s in updated_stocks]
         
     except Exception as e:
-        logger.error(f"Batch refresh failed: {e}")
+        logger.error(f"Batch refresh failed for user [{user.username}]: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Batch refresh failed: {str(e)}")
 
 
 @app.get("/api/stocks/search", response_model=list[StockSummary])
 def search_stocks(q: str = "", db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """搜索股票（公共数据，所有用户共用）"""
     keyword = q.strip()
     if not keyword:
-        return get_stocks(db)
+        # 无搜索关键词时返回用户自选股
+        return get_stocks(db, user)
 
     logger.info(f"閹兼粎鍌ㄩ懖锛勩偍: {keyword}")
 
@@ -649,7 +660,7 @@ def get_stock_detail_api(code: str, db: Session = Depends(get_db), user: User = 
         logger.info(f"閼诧紕銈ㄦ稉宥呮躬閺佺増宓佹惔鎾茶厬閿涘苯鐨剧拠鏇氱矤娑撴粍鏌熺拹銏犵槣閼惧嘲褰? {code}")
         # 娴犲簼绗㈤弬纭呭偍鐎靛矁骞忛崣鏍ц嫙娣囨繂鐡ㄩ崚鐗堟殶閹诡喖绨?
         try:
-            from backend.app.eastmoney_service import get_stock_info_by_code
+            from app.eastmoney_service import get_stock_info_by_code
             stock_info = get_stock_info_by_code(code)
             if stock_info:
                 stock = Stock(
@@ -968,7 +979,7 @@ def add_to_watchlist(code: str, db: Session = Depends(get_db), user: User = Depe
         stock = db.query(Stock).filter(Stock.code == code).first()
         if not stock:
             # 娴犲孩鏆熼幑顔界爱閼惧嘲褰囬懖锛勩偍娣団剝浼呴獮鏈电箽鐎涙ê鍩岄弫鐗堝祦鎼?
-            from backend.app.eastmoney_service import get_stock_info_by_code
+            from app.eastmoney_service import get_stock_info_by_code
             stock_info = get_stock_info_by_code(code)
             if stock_info:
                 stock = Stock(
@@ -1144,8 +1155,14 @@ def change_password(request: ChangePasswordRequest, db: Session = Depends(get_db
 
 @app.post("/api/auth/validate-password", response_model=PasswordStrengthResponse)
 def check_password_strength(password: str):
-    """妤犲矁鐦夌€靛棛鐖滃鍝勫"""
+    """妤犲矁鐦夌€靛棛鐖滃鍝勫€"""
     return validate_password_strength(password)
+
+
+@app.get("/api/auth/verify")
+def verify_token(user: User = Depends(get_current_user)):
+    """Verify token is valid and get user info."""
+    return {"valid": True, "username": user.username, "user_id": user.id}
 
 
 @app.get("/api/auth/generate-password")

@@ -2,8 +2,8 @@ from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime, timezone
-from backend.app.config import db_config
-from backend.app.security import hash_password, is_password_hash, verify_password, validate_password_strength
+from app.config import db_config
+from app.security import hash_password, is_password_hash, verify_password, validate_password_strength
 
 engine = create_engine(db_config.url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

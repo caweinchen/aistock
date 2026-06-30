@@ -10,10 +10,11 @@ import { SettingsScreen } from './src/pages/SettingsScreen';
 import { ProfileScreen } from './src/pages/ProfileScreen';
 import { LegalScreen } from './src/pages/LegalScreen';
 import { StockDetailScreen } from './src/pages/StockDetailScreen';
-import { isLoggedIn as checkLoggedIn, clearAuthToken } from './src/services/storage';
+import { clearAuthToken, getAuthToken } from './src/services/storage';
+import { getStartupRouteState } from './src/services/startupRoute';
 import type { ResearchSnapshot } from './src/types';
 
-type Screen = 'home' | 'settings' | 'login-settings' | 'profile' | 'stock-detail' | 'terms' | 'privacy';
+type Screen = 'login' | 'home' | 'settings' | 'login-settings' | 'profile' | 'stock-detail' | 'terms' | 'privacy';
 
 type LegalType = 'terms' | 'privacy';
 
@@ -23,8 +24,9 @@ interface ScreenParams {
 }
 
 export default function App() {
+  const [isInitialized, setIsInitialized] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentScreen, setCurrentScreen] = useState<Screen>('home');
+  const [currentScreen, setCurrentScreen] = useState<Screen>('login');
   const [screenParams, setScreenParams] = useState<ScreenParams>({});
   const [refreshKey, setRefreshKey] = useState(0);
   const [isSearchVisible, setIsSearchVisible] = useState(false);
@@ -32,23 +34,33 @@ export default function App() {
   const [pendingSearchQuery, setPendingSearchQuery] = useState<string | null>(null);
   const [selectedStockCode, setSelectedStockCode] = useState<string | undefined>();
   const [researchSnapshot, setResearchSnapshot] = useState<ResearchSnapshot | null>(null);
+  const [tokenInvalid, setTokenInvalid] = useState(false);
 
   useEffect(() => {
-    // initialize native storage cache before checking login state
     (async () => {
       try {
         await initStorage();
       } catch {
         // ignore init errors
       }
-      setIsLoggedIn(checkLoggedIn());
+      const startupRouteState = getStartupRouteState();
+      setIsLoggedIn(startupRouteState.isLoggedIn);
+      setCurrentScreen(startupRouteState.currentScreen);
+      setIsInitialized(true);
     })();
   }, []);
+
+  useEffect(() => {
+    if (tokenInvalid) {
+      handleLogout();
+    }
+  }, [tokenInvalid]);
 
   const goToSettings = () => setCurrentScreen('settings');
   const goToHome = () => {
     setCurrentScreen('home');
     setScreenParams({});
+    setTokenInvalid(false);
   };
   const goToLoginSettings = () => setCurrentScreen('login-settings');
   const goToProfile = () => setCurrentScreen('profile');
@@ -70,12 +82,14 @@ export default function App() {
   const handleLoginSuccess = () => {
     setIsLoggedIn(true);
     setCurrentScreen('home');
+    setTokenInvalid(false);
   };
 
   const handleLogout = () => {
     clearAuthToken();
     setIsLoggedIn(false);
-    setCurrentScreen('home');
+    setCurrentScreen('login');
+    setTokenInvalid(false);
   };
 
   const handleConfigSaved = () => {
@@ -98,6 +112,25 @@ export default function App() {
     setCurrentScreen('home');
   };
 
+  const handleTokenInvalid = () => {
+    setTokenInvalid(true);
+  };
+
+  // Show loading state while initializing
+  if (!isInitialized) {
+    return (
+      <I18nProvider>
+        <SafeAreaView style={styles.safeArea}>
+          <StatusBar style="dark" />
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading...</Text>
+          </View>
+        </SafeAreaView>
+      </I18nProvider>
+    );
+  }
+
+  // Show login screen when not logged in
   if (!isLoggedIn) {
     return (
       <I18nProvider>
@@ -105,14 +138,14 @@ export default function App() {
           <StatusBar style="dark" />
           {currentScreen === 'login-settings' ? (
             <SettingsScreen
-              onBack={() => setCurrentScreen('home')}
+              onBack={() => setCurrentScreen('login')}
               onConfigSaved={handleConfigSaved}
             />
           ) : currentScreen === 'terms' || currentScreen === 'privacy' ? (
             <LegalScreen
               type={screenParams.legalType ?? 'terms'}
               onBack={() => {
-                setCurrentScreen('home');
+                setCurrentScreen('login');
                 setScreenParams({});
               }}
             />
@@ -152,6 +185,7 @@ export default function App() {
           <StockDetailScreen
             stockCode={screenParams.stockCode || ''}
             onBack={goToHome}
+            onTokenInvalid={handleTokenInvalid}
             researchSnapshot={researchSnapshot}
             onResearchSnapshotChange={setResearchSnapshot}
           />
@@ -169,6 +203,7 @@ export default function App() {
             onOpenProfile={goToProfile}
             onLogout={handleLogout}
             onOpenStockDetail={goToStockDetail}
+            onTokenInvalid={handleTokenInvalid}
           />
         );
     }
@@ -307,6 +342,15 @@ const styles = StyleSheet.create({
   screenSlot: {
     flex: 1,
     marginHorizontal: -20,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#6B7280',
+    fontSize: 14,
   },
   header: {
     alignItems: 'center',

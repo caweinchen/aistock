@@ -8,6 +8,7 @@ export const en = {
     yes: 'Yes',
     no: 'No',
     switchLanguage: 'Switch Language',
+    refresh: 'Refresh',
   },
   stock: {
     name: 'Name',
@@ -272,6 +273,10 @@ export const en = {
     warningText: 'This app provides research and risk control assistance only. No profit guarantee, no automatic trading.',
     dataLoadFailed: 'Data load failed',
     retry: 'Retry',
+    offlineMode: 'Offline Mode',
+    noCachedData: 'You are currently offline and no cached data is available. Please connect to the internet and refresh.',
+    connectAndRefresh: 'Connect & Refresh',
+    noAlerts: 'No alerts',
   },
   chart: {
     title: 'Price Trend',
@@ -289,6 +294,8 @@ export const en = {
     fetchStrategy: 'Failed to fetch strategy detail',
     createBacktest: 'Create backtest failed',
     login: 'Login failed',
+    offlineLoginFailed: 'Offline login failed, please check username and password',
+    refreshAllStocks: 'Refresh stocks failed',
   },
   formatter: {
     updated: 'Updated',

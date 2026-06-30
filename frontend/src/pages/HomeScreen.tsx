@@ -17,6 +17,7 @@ interface HomeScreenProps {
   onOpenProfile?: () => void;
   onLogout?: () => void;
   onOpenStockDetail?: (stockCode: string) => void;
+  onTokenInvalid?: () => void;
   pendingSearchQuery?: string | null;
   selectedStockCode?: string;
   onSelectedStockCodeChange?: (stockCode: string) => void;
@@ -25,6 +26,7 @@ interface HomeScreenProps {
 
 export function HomeScreen({
   onOpenStockDetail,
+  onTokenInvalid,
   pendingSearchQuery = null,
   selectedStockCode,
   onSelectedStockCodeChange,
@@ -38,6 +40,9 @@ export function HomeScreen({
     isLoadingStocks,
     isLoadingDetail,
     error,
+    isOffline,
+    offlineNoCache,
+    tokenInvalid,
     watchlistCodes,
     customStrategiesByCode,
     loadStocks,
@@ -47,6 +52,12 @@ export function HomeScreen({
     createCustomBacktest,
     refreshWatchlist,
   } = useStockData();
+
+  useEffect(() => {
+    if (tokenInvalid && onTokenInvalid) {
+      onTokenInvalid();
+    }
+  }, [tokenInvalid, onTokenInvalid]);
 
   const [updatingWatchlistCode, setUpdatingWatchlistCode] = useState<string | null>(null);
   const [expandedStrategyId, setExpandedStrategyId] = useState<string | null>(null);
@@ -162,6 +173,21 @@ export function HomeScreen({
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      {offlineNoCache && (
+        <View style={styles.offlinePanel}>
+          <View style={styles.offlineIcon}>
+            <AlertTriangle size={24} color="#F59E0B" />
+          </View>
+          <View style={styles.offlineCopy}>
+            <Text style={styles.offlineTitle}>{t.home.offlineMode}</Text>
+            <Text style={styles.offlineText}>{t.home.noCachedData}</Text>
+            <Pressable style={styles.offlineRetryButton} onPress={handleRefreshWatchlist}>
+              <RefreshCcw size={16} color="#FFFFFF" />
+              <Text style={styles.offlineRetryButtonText}>{t.home.connectAndRefresh}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
       {error && (
         <View style={styles.errorPanel}>
           <AlertTriangle size={20} color="#B42318" />
@@ -386,4 +412,34 @@ const styles = StyleSheet.create({
   warningCopy: { flex: 1, gap: 5 },
   warningTitle: { color: '#92400E', fontSize: 14, fontWeight: '800' },
   warningText: { color: '#9A3412', fontSize: 13, lineHeight: 20 },
+  offlinePanel: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FEF3C7',
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    padding: 14,
+  },
+  offlineIcon: {
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  offlineCopy: { flex: 1, gap: 5 },
+  offlineTitle: { color: '#92400E', fontSize: 14, fontWeight: '800' },
+  offlineText: { color: '#B45309', fontSize: 13, lineHeight: 20 },
+  offlineRetryButton: {
+    alignItems: 'center',
+    backgroundColor: '#F59E0B',
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 6,
+    minHeight: 34,
+    paddingHorizontal: 12,
+  },
+  offlineRetryButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
 });

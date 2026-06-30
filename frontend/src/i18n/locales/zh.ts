@@ -8,6 +8,7 @@ export const zh = {
     yes: '是',
     no: '否',
     switchLanguage: '切换语言',
+    refresh: '刷新',
   },
   stock: {
     name: '名称',
@@ -272,6 +273,10 @@ export const zh = {
     warningText: 'App 只提供研究和风控辅助，不承诺收益，不自动下单。',
     dataLoadFailed: '数据加载失败',
     retry: '重试',
+    offlineMode: '离线模式',
+    noCachedData: '当前处于离线状态，且暂无缓存数据。请连接网络后刷新获取数据。',
+    connectAndRefresh: '连接并刷新',
+    noAlerts: '暂无风险提示',
   },
   chart: {
     title: '价格走势',
@@ -289,6 +294,8 @@ export const zh = {
     fetchStrategy: '获取策略详情失败',
     createBacktest: '创建回测失败',
     login: '登录失败',
+    offlineLoginFailed: '离线登录失败，请检查用户名和密码',
+    refreshAllStocks: '刷新股票数据失败',
   },
   formatter: {
     updated: '更新',

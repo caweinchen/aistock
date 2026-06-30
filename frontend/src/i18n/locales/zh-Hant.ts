@@ -8,6 +8,7 @@ export const zhHant = {
     yes: '是',
     no: '否',
     switchLanguage: '切換語言',
+    refresh: '刷新',
   },
   stock: {
     name: '名稱',
@@ -272,6 +273,10 @@ export const zhHant = {
     warningText: 'App 只提供研究和風控輔助，不承諾收益，不自動下單。',
     dataLoadFailed: '數據加載失敗',
     retry: '重試',
+    offlineMode: '離線模式',
+    noCachedData: '當前處於離線狀態，且暫無緩存數據。請連接網絡後刷新獲取數據。',
+    connectAndRefresh: '連接並刷新',
+    noAlerts: '暫無風險提示',
   },
   chart: {
     title: '價格走勢',
@@ -289,6 +294,8 @@ export const zhHant = {
     fetchStrategy: '獲取策略詳情失敗',
     createBacktest: '創建回測失敗',
     login: '登錄失敗',
+    offlineLoginFailed: '離線登錄失敗，請檢查用戶名和密碼',
+    refreshAllStocks: '刷新股票數據失敗',
   },
   formatter: {
     updated: '更新',

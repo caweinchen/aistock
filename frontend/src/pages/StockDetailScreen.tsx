@@ -13,15 +13,19 @@ import { getStockDetail, getStrategyDetail, getStockInstHold, getStockDividend, 
 interface StockDetailScreenProps {
   stockCode: string;
   onBack: () => void;
+  onTokenInvalid?: () => void;
   researchSnapshot?: ResearchSnapshot | null;
   onResearchSnapshotChange?: (snapshot: ResearchSnapshot) => void;
 }
 
-export function StockDetailScreen({ stockCode, onBack, researchSnapshot, onResearchSnapshotChange }: StockDetailScreenProps) {
+export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchSnapshot, onResearchSnapshotChange }: StockDetailScreenProps) {
   const { t } = useTranslation();
   const [detail, setDetail] = useState<StockDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [offlineNoCache, setOfflineNoCache] = useState(false);
   const [expandedStrategyId, setExpandedStrategyId] = useState<string | null>(null);
   const [loadingStrategyId, setLoadingStrategyId] = useState<string | null>(null);
   const [strategyDetails, setStrategyDetails] = useState<Record<string, StrategyDetail>>({});
@@ -32,11 +36,12 @@ export function StockDetailScreen({ stockCode, onBack, researchSnapshot, onResea
   const [news, setNews] = useState<StockNews[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
 
+  // Cache-first loading on mount
   useEffect(() => {
-    void loadDetail(true);
-    void loadInstHold();
-    void loadDividend();
-    void loadNews();
+    void loadDetail(false); // cache-first
+    void loadInstHold(false); // cache-first
+    void loadDividend(false); // cache-first
+    void loadNews(false); // cache-first
   }, [stockCode]);
 
   useEffect(() => {
@@ -56,12 +61,15 @@ export function StockDetailScreen({ stockCode, onBack, researchSnapshot, onResea
     });
   }, [detail, onResearchSnapshotChange]);
 
-  const loadInstHold = async () => {
+  const loadInstHold = async (forceRefresh = false) => {
     if (!stockCode) return;
     setInstHoldLoading(true);
     try {
-      const data = await getStockInstHold(stockCode);
-      setInstHold(data);
+      const result = await getStockInstHold(stockCode, forceRefresh);
+      if (result.data) {
+        setInstHold(result.data);
+        setFromCache(result.fromCache);
+      }
     } catch (err) {
       console.warn('Failed to load institution holdings:', err);
     } finally {
@@ -69,12 +77,15 @@ export function StockDetailScreen({ stockCode, onBack, researchSnapshot, onResea
     }
   };
 
-  const loadDividend = async () => {
+  const loadDividend = async (forceRefresh = false) => {
     if (!stockCode) return;
     setDividendLoading(true);
     try {
-      const data = await getStockDividend(stockCode);
-      setDividend(data);
+      const result = await getStockDividend(stockCode, forceRefresh);
+      if (result.data) {
+        setDividend(result.data);
+        setFromCache(result.fromCache);
+      }
     } catch (err) {
       console.warn('Failed to load dividend records:', err);
     } finally {
@@ -82,12 +93,15 @@ export function StockDetailScreen({ stockCode, onBack, researchSnapshot, onResea
     }
   };
 
-  const loadNews = async () => {
+  const loadNews = async (forceRefresh = false) => {
     if (!stockCode) return;
     setNewsLoading(true);
     try {
-      const data = await getStockNews(stockCode);
-      setNews(data);
+      const result = await getStockNews(stockCode, forceRefresh);
+      if (result.data) {
+        setNews(result.data);
+        setFromCache(result.fromCache);
+      }
     } catch (err) {
       console.warn('Failed to load news:', err);
     } finally {
@@ -103,11 +117,30 @@ export function StockDetailScreen({ stockCode, onBack, researchSnapshot, onResea
     }
     setIsLoading(true);
     setError(null);
+    setOfflineNoCache(false);
     try {
-      const data = await getStockDetail(stockCode, forceRefresh);
-      setDetail(data);
+      const result = await getStockDetail(stockCode, forceRefresh);
+      
+      if (result.tokenInvalid && onTokenInvalid) {
+        onTokenInvalid();
+        return;
+      }
+      
+      if (result.data) {
+        setDetail(result.data);
+        setFromCache(result.fromCache);
+        setIsOffline(result.isOffline ?? false);
+        if (result.error) {
+          setError(result.error);
+        }
+      } else if (result.isOffline) {
+        setOfflineNoCache(true);
+        setIsOffline(true);
+      }
     } catch (err) {
       setError(t.error.fetchStockDetail);
+      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      setIsOffline(isNetworkError);
     } finally {
       setIsLoading(false);
     }
@@ -125,38 +158,93 @@ export function StockDetailScreen({ stockCode, onBack, researchSnapshot, onResea
     setLoadingStrategyId(strategyId);
 
     try {
-      const result = await getStrategyDetail(stockCode, strategyId);
+      // Cache-first: try to get cached strategy detail first
+      const result = await getStrategyDetail(stockCode, strategyId, false);
       const key = `${stockCode}:${strategyId}`;
-      setStrategyDetails((current) => ({ ...current, [key]: result }));
+      const strategyDetail = result.data;
+      if (strategyDetail) {
+        setStrategyDetails((current) => ({ ...current, [key]: strategyDetail }));
+      }
     } catch (err) {
-      setError(t.error.fetchStrategy);
+      // Silently fail for strategy detail - user can retry
+      console.warn('Failed to load strategy detail:', err);
     } finally {
       setLoadingStrategyId(null);
     }
   };
 
+  // Explicit refresh - server fetch with cache update
   const handleRefresh = async () => {
-    await loadDetail(true);
+    await Promise.all([
+      loadDetail(true),
+      loadInstHold(true),
+      loadDividend(true),
+      loadNews(true),
+    ]);
   };
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#0F8B8D" />
-        <Text style={styles.loadingText}>{t.home.loadingDetail}</Text>
+      <View style={styles.screenContainer}>
+        <View style={styles.header}>
+          <Pressable style={styles.backButton} onPress={onBack}>
+            <ArrowLeft size={20} color="#162033" />
+          </Pressable>
+          <View style={styles.headerTitleBlock}>
+            <Text style={styles.loadingTitle}>{t.home.loadingDetail}</Text>
+          </View>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#0F8B8D" />
+          <Text style={styles.loadingText}>{t.home.loadingDetail}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (offlineNoCache) {
+    return (
+      <View style={styles.screenContainer}>
+        <View style={styles.header}>
+          <Pressable style={styles.backButton} onPress={onBack}>
+            <ArrowLeft size={20} color="#162033" />
+          </Pressable>
+          <View style={styles.headerTitleBlock}>
+            <Text style={styles.stockName}>{stockCode}</Text>
+          </View>
+        </View>
+        <View style={styles.offlineContainer}>
+          <AlertTriangle size={48} color="#F59E0B" />
+          <Text style={styles.offlineTitle}>{t.home.offlineMode}</Text>
+          <Text style={styles.offlineText}>{t.home.noCachedData}</Text>
+          <Pressable style={styles.offlineRetryButton} onPress={handleRefresh}>
+            <RefreshCcw size={16} color="#FFFFFF" />
+            <Text style={styles.offlineRetryButtonText}>{t.home.connectAndRefresh}</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   if (error || !detail) {
     return (
-      <View style={styles.errorContainer}>
-        <AlertTriangle size={48} color="#B42318" />
-        <Text style={styles.errorText}>{error || t.home.dataLoadFailed}</Text>
-        <Pressable style={styles.retryButton} onPress={handleRefresh}>
-          <RefreshCcw size={16} color="#FFFFFF" />
-          <Text style={styles.retryButtonText}>{t.home.retry}</Text>
-        </Pressable>
+      <View style={styles.screenContainer}>
+        <View style={styles.header}>
+          <Pressable style={styles.backButton} onPress={onBack}>
+            <ArrowLeft size={20} color="#162033" />
+          </Pressable>
+          <View style={styles.headerTitleBlock}>
+            <Text style={styles.stockName}>{stockCode}</Text>
+          </View>
+        </View>
+        <View style={styles.errorContainer}>
+          <AlertTriangle size={48} color="#B42318" />
+          <Text style={styles.errorText}>{error || t.home.dataLoadFailed}</Text>
+          <Pressable style={styles.retryButton} onPress={handleRefresh}>
+            <RefreshCcw size={16} color="#FFFFFF" />
+            <Text style={styles.retryButtonText}>{t.home.retry}</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -180,7 +268,7 @@ export function StockDetailScreen({ stockCode, onBack, researchSnapshot, onResea
         </Pressable>
       </View>
 
-      <ResearchPanel snapshot={researchSnapshot} />
+      <ResearchPanel snapshot={researchSnapshot ?? null} />
 
       <View style={styles.pricePanel}>
         <View style={styles.priceBlock}>
@@ -385,6 +473,7 @@ function ResearchPanel({ snapshot }: { snapshot: ResearchSnapshot | null }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F6F7FB' },
+  screenContainer: { flex: 1, backgroundColor: '#F6F7FB', paddingHorizontal: 20, paddingTop: 20 },
   content: { padding: 20, paddingBottom: 36, gap: 18 },
   header: {
     alignItems: 'center',
@@ -516,6 +605,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: { color: '#6B7280', fontSize: 14 },
+  loadingTitle: { color: '#6B7280', fontSize: 20, fontWeight: '800' },
   errorContainer: {
     alignItems: 'center',
     flex: 1,
@@ -645,4 +735,23 @@ const styles = StyleSheet.create({
     color: '#3B82F6',
     fontSize: 12,
   },
+  offlineContainer: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    gap: 16,
+    padding: 20,
+  },
+  offlineTitle: { color: '#92400E', fontSize: 18, fontWeight: '700' },
+  offlineText: { color: '#B45309', fontSize: 14, textAlign: 'center', lineHeight: 1.6 },
+  offlineRetryButton: {
+    alignItems: 'center',
+    backgroundColor: '#F59E0B',
+    borderRadius: 8,
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  offlineRetryButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
 });
