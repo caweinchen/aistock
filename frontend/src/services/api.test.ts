@@ -175,7 +175,11 @@ describe('api cache policy', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, json: async () => ({}) })));
     const { searchStocks } = await import('./api');
 
-    await expect(searchStocks('ping')).resolves.toEqual([stock]);
+    await expect(searchStocks('ping')).resolves.toEqual({
+      data: [stock],
+      fromCache: true,
+      isOffline: false,
+    });
   });
 
   it('refreshing stock detail also caches strategy detail for offline viewing', async () => {

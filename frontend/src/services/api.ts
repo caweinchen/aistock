@@ -17,7 +17,7 @@ import type {
 } from '../types';
 import { getApiBaseUrl, getAuthToken } from './storage';
 import * as localDb from './localDb';
-import { isOnline, isOffline, checkNetwork } from './network';
+import { isOffline } from './network';
 
 function getApiBase(): string {
   return getApiBaseUrl();
@@ -35,14 +35,36 @@ export function debugAuthToken(): string | null {
   return getAuthToken();
 }
 
+async function cacheStrategyDetailsForStock(code: string, detail: StockDetail): Promise<void> {
+  await Promise.allSettled(
+    detail.strategies.map(async (strategy) => {
+      const response = await fetch(`${getApiBase()}/api/stocks/${code}/strategies/${strategy.id}`, {
+        headers: getAuthHeaders(),
+      });
+      if (!response.ok) throw new Error('fetchStrategy');
+      const strategyDetail: StrategyDetail = await response.json();
+      await localDb.saveStrategyDetail(code, strategy.id, strategyDetail);
+    }),
+  );
+}
+
+async function refreshStockOfflineCache(code: string): Promise<void> {
+  await Promise.allSettled([
+    getStockDetail(code, true),
+    getStockDividend(code, true),
+    getStockNews(code, true),
+    getStockInstHold(code, true),
+  ]);
+}
+
 // ============================================
 // Stock List - Cache First
 // ============================================
 
 export async function getStocks(forceRefresh = false): Promise<{ data: StockSummary[] | null; fromCache: boolean; error?: string; isOffline?: boolean }> {
-  if (!forceRefresh && isOffline()) {
+  if (!forceRefresh) {
     const cached = await localDb.getStocks();
-    return { data: cached ?? [], fromCache: true, isOffline: true };
+    return { data: cached ?? [], fromCache: true };
   }
 
   try {
@@ -121,9 +143,9 @@ export async function searchStocks(keyword: string): Promise<{ data: StockSummar
 // ============================================
 
 export async function getStockDetail(code: string, forceRefresh = false): Promise<{ data: StockDetail | null; fromCache: boolean; error?: string; tokenInvalid?: boolean; isOffline?: boolean }> {
-  if (!forceRefresh && isOffline()) {
+  if (!forceRefresh) {
     const cached = await localDb.getStockDetail(code);
-    return { data: cached, fromCache: true, isOffline: true };
+    return { data: cached, fromCache: true };
   }
 
   try {
@@ -139,7 +161,8 @@ export async function getStockDetail(code: string, forceRefresh = false): Promis
     const data: StockDetail = await response.json();
     
     await localDb.saveStockDetail(code, data);
-    return { data, fromCache: false, isOffline: false };
+    await cacheStrategyDetailsForStock(code, data);
+    return { data, fromCache: false };
   } catch (err) {
     const cached = await localDb.getStockDetail(code);
     if (cached) {
@@ -185,9 +208,9 @@ export async function removeFromWatchlist(code: string): Promise<StockSummary[]>
 // ============================================
 
 export async function getStrategyDetail(code: string, strategyId: string, forceRefresh = false): Promise<{ data: StrategyDetail | null; fromCache: boolean; error?: string; isOffline?: boolean }> {
-  if (!forceRefresh && isOffline()) {
+  if (!forceRefresh) {
     const cached = await localDb.getStrategyDetail(code, strategyId);
-    return { data: cached, fromCache: true, isOffline: true };
+    return { data: cached, fromCache: true };
   }
 
   try {
@@ -198,7 +221,7 @@ export async function getStrategyDetail(code: string, strategyId: string, forceR
     const data: StrategyDetail = await response.json();
     
     await localDb.saveStrategyDetail(code, strategyId, data);
-    return { data, fromCache: false, isOffline: false };
+    return { data, fromCache: false };
   } catch (err) {
     const cached = await localDb.getStrategyDetail(code, strategyId);
     if (cached) {
@@ -214,9 +237,9 @@ export async function getStrategyDetail(code: string, strategyId: string, forceR
 // ============================================
 
 export async function getStockDividend(code: string, forceRefresh = false): Promise<{ data: DividendRecord[] | null; fromCache: boolean; error?: string; isOffline?: boolean }> {
-  if (!forceRefresh && isOffline()) {
+  if (!forceRefresh) {
     const cached = await localDb.getDividend(code);
-    return { data: cached ?? [], fromCache: true, isOffline: true };
+    return { data: cached ?? [], fromCache: true };
   }
 
   try {
@@ -227,7 +250,7 @@ export async function getStockDividend(code: string, forceRefresh = false): Prom
     const data: DividendRecord[] = await response.json();
     
     await localDb.saveDividend(code, data);
-    return { data, fromCache: false, isOffline: false };
+    return { data, fromCache: false };
   } catch (err) {
     const cached = await localDb.getDividend(code);
     if (cached) {
@@ -243,9 +266,9 @@ export async function getStockDividend(code: string, forceRefresh = false): Prom
 // ============================================
 
 export async function getStockNews(code: string, forceRefresh = false): Promise<{ data: StockNews[] | null; fromCache: boolean; error?: string; isOffline?: boolean }> {
-  if (!forceRefresh && isOffline()) {
+  if (!forceRefresh) {
     const cached = await localDb.getNews(code);
-    return { data: cached ?? [], fromCache: true, isOffline: true };
+    return { data: cached ?? [], fromCache: true };
   }
 
   try {
@@ -256,7 +279,7 @@ export async function getStockNews(code: string, forceRefresh = false): Promise<
     const data: StockNews[] = await response.json();
     
     await localDb.saveNews(code, data);
-    return { data, fromCache: false, isOffline: false };
+    return { data, fromCache: false };
   } catch (err) {
     const cached = await localDb.getNews(code);
     if (cached) {
@@ -272,9 +295,9 @@ export async function getStockNews(code: string, forceRefresh = false): Promise<
 // ============================================
 
 export async function getStockInstHold(code: string, forceRefresh = false): Promise<{ data: InstHoldRecord[] | null; fromCache: boolean; error?: string; isOffline?: boolean }> {
-  if (!forceRefresh && isOffline()) {
+  if (!forceRefresh) {
     const cached = await localDb.getInstHold(code);
-    return { data: cached ?? [], fromCache: true, isOffline: true };
+    return { data: cached ?? [], fromCache: true };
   }
 
   try {
@@ -285,7 +308,7 @@ export async function getStockInstHold(code: string, forceRefresh = false): Prom
     const data: InstHoldRecord[] = await response.json();
     
     await localDb.saveInstHold(code, data);
-    return { data, fromCache: false, isOffline: false };
+    return { data, fromCache: false };
   } catch (err) {
     const cached = await localDb.getInstHold(code);
     if (cached) {
@@ -414,6 +437,7 @@ export async function refreshAllStocks(): Promise<{ data: StockSummary[] | null;
     const data: StockSummary[] = await response.json();
     
     await localDb.saveStocks(data);
+    await Promise.allSettled(data.map((stock) => refreshStockOfflineCache(stock.code)));
     return { data };
   } catch (err) {
     const cached = await localDb.getStocks();
