@@ -18,6 +18,8 @@
   - `8000`：后端 API
   - `8080`：前端 Web
 
+Windows Docker Desktop 必须使用 Linux containers。右键系统托盘里的 Docker Desktop 图标，如果看到 `Switch to Linux containers...`，请点击切换；如果看到 `Switch to Windows containers...`，说明当前已经是 Linux containers。
+
 ### 可选
 
 - TuShare token
@@ -103,6 +105,18 @@ FRONTEND_PORT=8080
 APP_DEBUG=false
 TUSHARE_ENABLED=false
 TUSHARE_TOKEN=
+
+DOCKER_PLATFORM=linux/amd64
+
+MYSQL_IMAGE=docker.m.daocloud.io/library/mysql:8.0
+PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.12-slim
+NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
+NGINX_IMAGE=docker.m.daocloud.io/library/nginx:1.27-alpine
+
+APT_MIRROR=https://mirrors.aliyun.com/debian
+ALPINE_MIRROR=https://mirrors.aliyun.com/alpine
+PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+NPM_REGISTRY=https://registry.npmmirror.com
 ```
 
 ## 第 2 步：构建并启动
@@ -253,6 +267,31 @@ FRONTEND_PORT=8081
 
 ```powershell
 docker compose --env-file docker\.env up -d
+```
+
+### no matching manifest for windows/amd64
+
+如果看到：
+
+```text
+no matching manifest for windows/amd64 ... in the manifest list entries
+```
+
+说明 Docker Desktop 当前使用的是 Windows containers。请切换到 Linux containers：
+
+1. 右键系统托盘 Docker Desktop 图标。
+2. 点击 `Switch to Linux containers...`。
+3. 等待 Docker 重启完成。
+4. 重新执行：
+
+```powershell
+docker compose --env-file docker\.env up -d --build
+```
+
+`docker\.env` 中应保留：
+
+```env
+DOCKER_PLATFORM=linux/amd64
 ```
 
 ### 后端连不上数据库

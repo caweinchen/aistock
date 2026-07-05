@@ -1,6 +1,7 @@
 services:
   mysql:
     image: ${MYSQL_IMAGE:-mysql:8.0}
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     container_name: aistock-mysql
     restart: unless-stopped
     environment:
@@ -22,6 +23,7 @@ services:
       - aistock
 
   backend:
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
@@ -58,6 +60,7 @@ services:
       - aistock
 
   frontend:
+    platform: ${DOCKER_PLATFORM:-linux/amd64}
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
