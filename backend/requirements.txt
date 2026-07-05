@@ -5,3 +5,4 @@ mysql-connector-python==9.7.0
 httpx==0.28.1
 tushare==1.4.29
 python-dotenv==1.0.1
+cryptography==46.0.3

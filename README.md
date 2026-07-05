@@ -82,6 +82,7 @@ AIStock-new/
 如果只是想快速部署一套可运行系统，请优先阅读：
 
 - [Windows 简易部署指南](./docs/DEPLOY_SIMPLE.md)
+- [Docker 本机部署测试指南](./docs/DEPLOY_DOCKER.md)
 
 ## 后端配置
 

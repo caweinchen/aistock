@@ -44,6 +44,7 @@ android-sdk/
 # local env files
 .env
 .env*.local
+docker/.env
 .venv/
 
 # typescript
