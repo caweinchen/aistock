@@ -22,6 +22,8 @@ interface HomeScreenProps {
   selectedStockCode?: string;
   onSelectedStockCodeChange?: (stockCode: string) => void;
   onResearchSnapshotChange?: (snapshot: ResearchSnapshot) => void;
+  onOfflineChange?: (isOffline: boolean) => void;
+  onWatchlistUpdated?: () => void;
 }
 
 export function HomeScreen({
@@ -31,6 +33,8 @@ export function HomeScreen({
   selectedStockCode,
   onSelectedStockCodeChange,
   onResearchSnapshotChange,
+  onOfflineChange,
+  onWatchlistUpdated,
 }: HomeScreenProps) {
   const { t, locale } = useTranslation();
   const {
@@ -58,6 +62,12 @@ export function HomeScreen({
       onTokenInvalid();
     }
   }, [tokenInvalid, onTokenInvalid]);
+
+  useEffect(() => {
+    if (onOfflineChange) {
+      onOfflineChange(isOffline);
+    }
+  }, [isOffline, onOfflineChange]);
 
   const [updatingWatchlistCode, setUpdatingWatchlistCode] = useState<string | null>(null);
   const [expandedStrategyId, setExpandedStrategyId] = useState<string | null>(null);
@@ -152,8 +162,12 @@ export function HomeScreen({
 
   const handleToggleWatchlist = async (stock: typeof stocks[0]) => {
     setUpdatingWatchlistCode(stock.code);
-    await toggleWatchlist(stock);
+    const updated = await toggleWatchlist(stock);
     setUpdatingWatchlistCode(null);
+
+    if (updated && onWatchlistUpdated) {
+      onWatchlistUpdated();
+    }
   };
 
   const handleRefreshWatchlist = async () => {

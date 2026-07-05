@@ -14,10 +14,12 @@ import type {
   DividendRecord,
   StockNews,
   InstHoldRecord,
+  AppUser,
+  LoginResponse,
 } from '../types';
 import { getApiBaseUrl, getAuthToken } from './storage';
 import * as localDb from './localDb';
-import { isOffline } from './network';
+import { isOffline, isNetworkFailure } from './network';
 
 function getApiBase(): string {
   return getApiBaseUrl();
@@ -79,7 +81,7 @@ export async function getStocks(forceRefresh = false): Promise<{ data: StockSumm
   } catch (err) {
     const cached = await localDb.getStocks();
     if (cached && cached.length > 0) {
-      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      const isNetworkError = isNetworkFailure(err);
       return { data: cached, fromCache: true, error: isNetworkError ? 'Offline - showing cached data' : 'Server error - showing cached data', isOffline: isNetworkError };
     }
     throw err;
@@ -123,7 +125,7 @@ export async function searchStocks(keyword: string): Promise<{ data: StockSummar
     }
     return { data, fromCache: false, isOffline: false };
   } catch (err) {
-    const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+    const isNetworkError = isNetworkFailure(err);
     if (keyword) {
       const cachedSearch = await localDb.getSearchResult(keyword);
       if (cachedSearch) {
@@ -145,7 +147,9 @@ export async function searchStocks(keyword: string): Promise<{ data: StockSummar
 export async function getStockDetail(code: string, forceRefresh = false): Promise<{ data: StockDetail | null; fromCache: boolean; error?: string; tokenInvalid?: boolean; isOffline?: boolean }> {
   if (!forceRefresh) {
     const cached = await localDb.getStockDetail(code);
-    return { data: cached, fromCache: true };
+    if (cached && cached.updated_at) {
+      return { data: cached, fromCache: true };
+    }
   }
 
   try {
@@ -166,7 +170,7 @@ export async function getStockDetail(code: string, forceRefresh = false): Promis
   } catch (err) {
     const cached = await localDb.getStockDetail(code);
     if (cached) {
-      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      const isNetworkError = isNetworkFailure(err);
       return { data: cached, fromCache: true, error: isNetworkError ? 'Offline - showing cached data' : 'Server error - showing cached data', isOffline: isNetworkError };
     }
     throw err;
@@ -210,7 +214,9 @@ export async function removeFromWatchlist(code: string): Promise<StockSummary[]>
 export async function getStrategyDetail(code: string, strategyId: string, forceRefresh = false): Promise<{ data: StrategyDetail | null; fromCache: boolean; error?: string; isOffline?: boolean }> {
   if (!forceRefresh) {
     const cached = await localDb.getStrategyDetail(code, strategyId);
-    return { data: cached, fromCache: true };
+    if (cached) {
+      return { data: cached, fromCache: true };
+    }
   }
 
   try {
@@ -225,7 +231,7 @@ export async function getStrategyDetail(code: string, strategyId: string, forceR
   } catch (err) {
     const cached = await localDb.getStrategyDetail(code, strategyId);
     if (cached) {
-      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      const isNetworkError = isNetworkFailure(err);
       return { data: cached, fromCache: true, error: isNetworkError ? 'Offline - showing cached data' : 'Server error - showing cached data', isOffline: isNetworkError };
     }
     throw err;
@@ -254,7 +260,7 @@ export async function getStockDividend(code: string, forceRefresh = false): Prom
   } catch (err) {
     const cached = await localDb.getDividend(code);
     if (cached) {
-      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      const isNetworkError = isNetworkFailure(err);
       return { data: cached, fromCache: true, error: isNetworkError ? 'Offline - showing cached data' : 'Server error - showing cached data', isOffline: isNetworkError };
     }
     throw err;
@@ -283,7 +289,7 @@ export async function getStockNews(code: string, forceRefresh = false): Promise<
   } catch (err) {
     const cached = await localDb.getNews(code);
     if (cached) {
-      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      const isNetworkError = isNetworkFailure(err);
       return { data: cached, fromCache: true, error: isNetworkError ? 'Offline - showing cached data' : 'Server error - showing cached data', isOffline: isNetworkError };
     }
     throw err;
@@ -312,7 +318,7 @@ export async function getStockInstHold(code: string, forceRefresh = false): Prom
   } catch (err) {
     const cached = await localDb.getInstHold(code);
     if (cached) {
-      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      const isNetworkError = isNetworkFailure(err);
       return { data: cached, fromCache: true, error: isNetworkError ? 'Offline - showing cached data' : 'Server error - showing cached data', isOffline: isNetworkError };
     }
     throw err;
@@ -337,7 +343,35 @@ export async function createBacktest(request: BacktestRequest): Promise<Strategy
 // Login - Online First with Offline Fallback
 // ============================================
 
-export async function login(username: string, password: string): Promise<{ token: string; username: string; isOffline?: boolean }> {
+async function getErrorKey(response: Response, fallback: string): Promise<string> {
+  try {
+    const data = await response.json();
+    if (typeof data.detail === 'string') {
+      if (data.detail.includes('inactive')) return 'accountInactive';
+      if (data.detail.includes('already exists')) return 'usernameExists';
+    }
+  } catch {
+    // ignore malformed error bodies
+  }
+  return fallback;
+}
+
+async function loginOffline(username: string, password: string): Promise<LoginResponse & { isOffline: true }> {
+  const { verifyOfflineLogin, setOfflineToken, setStoredUser, setAuthToken } = await import('./storage');
+  const isValid = await verifyOfflineLogin(username, password);
+
+  if (!isValid) {
+    throw new Error('offlineLoginFailed');
+  }
+
+  const offlineToken = `offline_${username}_${Date.now()}`;
+  setOfflineToken(offlineToken);
+  setAuthToken(offlineToken);
+  setStoredUser(username);
+  return { token: offlineToken, username, user_id: 0, role: 'user', is_active: true, isOffline: true };
+}
+
+export async function login(username: string, password: string): Promise<LoginResponse & { isOffline?: boolean }> {
   let encryptedPassword = password;
   try {
     const { encryptPassword } = await import('../utils/crypto');
@@ -358,65 +392,95 @@ export async function login(username: string, password: string): Promise<{ token
     console.log('Login response status:', response.status);
     
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Login failed:', response.status, errorText);
-      throw new Error('login');
+      if (response.status >= 500) {
+        throw new Error('backendUnavailable');
+      }
+      throw new Error(await getErrorKey(response, 'login'));
     }
     
-    const result = await response.json();
+    const result: LoginResponse = await response.json();
     console.log('Login successful, token received');
     
     // Save password hash for offline login
     await import('./storage').then(({ savePasswordForOffline }) => savePasswordForOffline(username, password));
     
-    return { token: result.token, username: result.username };
+    return result;
   } catch (err) {
     console.error('Login catch error:', err);
-    // Check if it's a network error (offline)
-    if (err instanceof TypeError && err.message.includes('fetch')) {
-      // Try offline login
-      const { verifyOfflineLogin, setOfflineToken, setStoredUser, setAuthToken } = await import('./storage');
-      const isValid = await verifyOfflineLogin(username, password);
-      
-      if (isValid) {
-        // Generate offline token
-        const offlineToken = `offline_${username}_${Date.now()}`;
-        setOfflineToken(offlineToken);
-        setAuthToken(offlineToken);
-        setStoredUser(username);
-        return { token: offlineToken, username, isOffline: true };
-      }
-      
-      throw new Error('offlineLoginFailed');
+    if (isNetworkFailure(err) || (err instanceof Error && err.message === 'backendUnavailable')) {
+      return loginOffline(username, password);
     }
     
     throw err;
   }
 }
 
+export async function register(username: string, password: string): Promise<AppUser> {
+  let encryptedPassword = password;
+  try {
+    const { encryptPassword } = await import('../utils/crypto');
+    encryptedPassword = await encryptPassword(password);
+  } catch (e) {
+    console.warn('Failed to encrypt password, sending as plain text:', e);
+  }
+
+  const response = await fetch(`${getApiBase()}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password: encryptedPassword }),
+  });
+  if (!response.ok) {
+    throw new Error(await getErrorKey(response, 'register'));
+  }
+  return response.json();
+}
+
 // ============================================
 // Token Verification - Check if token is valid
 // ============================================
 
-export async function verifyToken(): Promise<{ valid: boolean; isOffline: boolean }> {
+export async function verifyToken(): Promise<{ valid: boolean; isOffline: boolean; role: 'admin' | 'user' | null }> {
   try {
     const response = await fetch(`${getApiBase()}/api/auth/verify`, {
       headers: getAuthHeaders(),
     });
     
     if (response.ok) {
-      return { valid: true, isOffline: false };
+      const data = await response.json();
+      return { valid: true, isOffline: false, role: data.role ?? null };
     }
     
     if (response.status === 401) {
-      return { valid: false, isOffline: false };
+      return { valid: false, isOffline: false, role: null };
     }
     
-    return { valid: false, isOffline: false };
+    return { valid: false, isOffline: false, role: null };
   } catch (err) {
-    const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
-    return { valid: false, isOffline: isNetworkError };
+    const isNetworkError = isNetworkFailure(err);
+    return { valid: false, isOffline: isNetworkError, role: null };
   }
+}
+
+export async function getUsers(): Promise<AppUser[]> {
+  const response = await fetch(`${getApiBase()}/api/admin/users`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    throw new Error(response.status === 403 ? 'permissionDenied' : 'fetchUsers');
+  }
+  return response.json();
+}
+
+export async function updateUser(userId: number, patch: Partial<Pick<AppUser, 'is_active' | 'role'>>): Promise<AppUser> {
+  const response = await fetch(`${getApiBase()}/api/admin/users/${userId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) {
+    throw new Error(response.status === 403 ? 'permissionDenied' : 'updateUser');
+  }
+  return response.json();
 }
 
 // ============================================
@@ -442,7 +506,7 @@ export async function refreshAllStocks(): Promise<{ data: StockSummary[] | null;
   } catch (err) {
     const cached = await localDb.getStocks();
     if (cached && cached.length > 0) {
-      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      const isNetworkError = isNetworkFailure(err);
       return { 
         data: cached, 
         error: isNetworkError ? 'Offline - showing cached data' : 'Server error - showing cached data',

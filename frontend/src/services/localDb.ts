@@ -13,21 +13,30 @@
  * - last update timestamps
  */
 
-import { storage, STORAGE_KEYS } from './storage';
+import { getStoredUser, getUserId, storage } from './storage';
 import type { StockSummary, StockDetail, StrategyDetail, DividendRecord, StockNews, InstHoldRecord } from '../types';
 
 // Cache key prefixes
 const CACHE_PREFIX = 'db_';
 const KEYS = {
-  STOCKS: `${CACHE_PREFIX}stocks`,
-  STOCK_DETAIL_PREFIX: `${CACHE_PREFIX}stock_detail_`,
-  STRATEGY_DETAIL_PREFIX: `${CACHE_PREFIX}strategy_detail_`,
-  DIVIDEND_PREFIX: `${CACHE_PREFIX}dividend_`,
-  NEWS_PREFIX: `${CACHE_PREFIX}news_`,
-  INST_HOLD_PREFIX: `${CACHE_PREFIX}inst_hold_`,
-  SEARCH_PREFIX: `${CACHE_PREFIX}search_`,
-  LAST_UPDATE: `${CACHE_PREFIX}last_update`,
+  STOCKS: 'stocks',
+  STOCK_DETAIL_PREFIX: 'stock_detail_',
+  STRATEGY_DETAIL_PREFIX: 'strategy_detail_',
+  DIVIDEND_PREFIX: 'dividend_',
+  NEWS_PREFIX: 'news_',
+  INST_HOLD_PREFIX: 'inst_hold_',
+  SEARCH_PREFIX: 'search_',
+  LAST_UPDATE: 'last_update',
 };
+
+function getCacheNamespace(): string {
+  const userKey = getStoredUser() ?? getUserId() ?? 'anonymous';
+  return `${CACHE_PREFIX}${encodeURIComponent(userKey)}_`;
+}
+
+function cacheKey(key: string): string {
+  return `${getCacheNamespace()}${key}`;
+}
 
 // ============================================
 // Stock List
@@ -35,8 +44,8 @@ const KEYS = {
 
 export async function saveStocks(stocks: StockSummary[]): Promise<void> {
   try {
-    await storage.setItem(KEYS.STOCKS, JSON.stringify(stocks));
-    await storage.setItem(KEYS.LAST_UPDATE, Date.now().toString());
+    await storage.setItem(cacheKey(KEYS.STOCKS), JSON.stringify(stocks));
+    await storage.setItem(cacheKey(KEYS.LAST_UPDATE), Date.now().toString());
   } catch (e) {
     console.warn('Failed to save stocks to local storage:', e);
   }
@@ -44,7 +53,7 @@ export async function saveStocks(stocks: StockSummary[]): Promise<void> {
 
 export async function getStocks(): Promise<StockSummary[] | null> {
   try {
-    const stored = await storage.getItem(KEYS.STOCKS);
+    const stored = await storage.getItem(cacheKey(KEYS.STOCKS));
     if (stored) {
       return JSON.parse(stored) as StockSummary[];
     }
@@ -61,7 +70,7 @@ export async function getStocks(): Promise<StockSummary[] | null> {
 
 export async function saveStockDetail(code: string, detail: StockDetail): Promise<void> {
   try {
-    await storage.setItem(`${KEYS.STOCK_DETAIL_PREFIX}${code}`, JSON.stringify(detail));
+    await storage.setItem(cacheKey(`${KEYS.STOCK_DETAIL_PREFIX}${code}`), JSON.stringify(detail));
   } catch (e) {
     console.warn(`Failed to save stock detail ${code} to local storage:`, e);
   }
@@ -69,7 +78,7 @@ export async function saveStockDetail(code: string, detail: StockDetail): Promis
 
 export async function getStockDetail(code: string): Promise<StockDetail | null> {
   try {
-    const stored = await storage.getItem(`${KEYS.STOCK_DETAIL_PREFIX}${code}`);
+    const stored = await storage.getItem(cacheKey(`${KEYS.STOCK_DETAIL_PREFIX}${code}`));
     if (stored) {
       return JSON.parse(stored) as StockDetail;
     }
@@ -86,7 +95,7 @@ export async function getStockDetail(code: string): Promise<StockDetail | null> 
 
 export async function saveStrategyDetail(code: string, strategyId: string, detail: StrategyDetail): Promise<void> {
   try {
-    await storage.setItem(`${KEYS.STRATEGY_DETAIL_PREFIX}${code}_${strategyId}`, JSON.stringify(detail));
+    await storage.setItem(cacheKey(`${KEYS.STRATEGY_DETAIL_PREFIX}${code}_${strategyId}`), JSON.stringify(detail));
   } catch (e) {
     console.warn(`Failed to save strategy detail ${code}_${strategyId} to local storage:`, e);
   }
@@ -94,7 +103,7 @@ export async function saveStrategyDetail(code: string, strategyId: string, detai
 
 export async function getStrategyDetail(code: string, strategyId: string): Promise<StrategyDetail | null> {
   try {
-    const stored = await storage.getItem(`${KEYS.STRATEGY_DETAIL_PREFIX}${code}_${strategyId}`);
+    const stored = await storage.getItem(cacheKey(`${KEYS.STRATEGY_DETAIL_PREFIX}${code}_${strategyId}`));
     if (stored) {
       return JSON.parse(stored) as StrategyDetail;
     }
@@ -111,7 +120,7 @@ export async function getStrategyDetail(code: string, strategyId: string): Promi
 
 export async function saveDividend(code: string, dividends: DividendRecord[]): Promise<void> {
   try {
-    await storage.setItem(`${KEYS.DIVIDEND_PREFIX}${code}`, JSON.stringify(dividends));
+    await storage.setItem(cacheKey(`${KEYS.DIVIDEND_PREFIX}${code}`), JSON.stringify(dividends));
   } catch (e) {
     console.warn(`Failed to save dividend ${code} to local storage:`, e);
   }
@@ -119,7 +128,7 @@ export async function saveDividend(code: string, dividends: DividendRecord[]): P
 
 export async function getDividend(code: string): Promise<DividendRecord[] | null> {
   try {
-    const stored = await storage.getItem(`${KEYS.DIVIDEND_PREFIX}${code}`);
+    const stored = await storage.getItem(cacheKey(`${KEYS.DIVIDEND_PREFIX}${code}`));
     if (stored) {
       return JSON.parse(stored) as DividendRecord[];
     }
@@ -136,7 +145,7 @@ export async function getDividend(code: string): Promise<DividendRecord[] | null
 
 export async function saveNews(code: string, news: StockNews[]): Promise<void> {
   try {
-    await storage.setItem(`${KEYS.NEWS_PREFIX}${code}`, JSON.stringify(news));
+    await storage.setItem(cacheKey(`${KEYS.NEWS_PREFIX}${code}`), JSON.stringify(news));
   } catch (e) {
     console.warn(`Failed to save news ${code} to local storage:`, e);
   }
@@ -144,7 +153,7 @@ export async function saveNews(code: string, news: StockNews[]): Promise<void> {
 
 export async function getNews(code: string): Promise<StockNews[] | null> {
   try {
-    const stored = await storage.getItem(`${KEYS.NEWS_PREFIX}${code}`);
+    const stored = await storage.getItem(cacheKey(`${KEYS.NEWS_PREFIX}${code}`));
     if (stored) {
       return JSON.parse(stored) as StockNews[];
     }
@@ -161,7 +170,7 @@ export async function getNews(code: string): Promise<StockNews[] | null> {
 
 export async function saveInstHold(code: string, holds: InstHoldRecord[]): Promise<void> {
   try {
-    await storage.setItem(`${KEYS.INST_HOLD_PREFIX}${code}`, JSON.stringify(holds));
+    await storage.setItem(cacheKey(`${KEYS.INST_HOLD_PREFIX}${code}`), JSON.stringify(holds));
   } catch (e) {
     console.warn(`Failed to save institution holdings ${code} to local storage:`, e);
   }
@@ -169,7 +178,7 @@ export async function saveInstHold(code: string, holds: InstHoldRecord[]): Promi
 
 export async function getInstHold(code: string): Promise<InstHoldRecord[] | null> {
   try {
-    const stored = await storage.getItem(`${KEYS.INST_HOLD_PREFIX}${code}`);
+    const stored = await storage.getItem(cacheKey(`${KEYS.INST_HOLD_PREFIX}${code}`));
     if (stored) {
       return JSON.parse(stored) as InstHoldRecord[];
     }
@@ -187,7 +196,7 @@ export async function getInstHold(code: string): Promise<InstHoldRecord[] | null
 export async function saveSearchResult(query: string, results: StockSummary[]): Promise<void> {
   try {
     const normalizedQuery = query.toLowerCase().trim();
-    await storage.setItem(`${KEYS.SEARCH_PREFIX}${normalizedQuery}`, JSON.stringify(results));
+    await storage.setItem(cacheKey(`${KEYS.SEARCH_PREFIX}${normalizedQuery}`), JSON.stringify(results));
   } catch (e) {
     console.warn('Failed to save search result to local storage:', e);
   }
@@ -196,7 +205,7 @@ export async function saveSearchResult(query: string, results: StockSummary[]): 
 export async function getSearchResult(query: string): Promise<StockSummary[] | null> {
   try {
     const normalizedQuery = query.toLowerCase().trim();
-    const stored = await storage.getItem(`${KEYS.SEARCH_PREFIX}${normalizedQuery}`);
+    const stored = await storage.getItem(cacheKey(`${KEYS.SEARCH_PREFIX}${normalizedQuery}`));
     if (stored) {
       return JSON.parse(stored) as StockSummary[];
     }
@@ -213,7 +222,7 @@ export async function getSearchResult(query: string): Promise<StockSummary[] | n
 
 export async function getLastUpdateTime(): Promise<number | null> {
   try {
-    const stored = await storage.getItem(KEYS.LAST_UPDATE);
+    const stored = await storage.getItem(cacheKey(KEYS.LAST_UPDATE));
     if (stored) {
       return parseInt(stored, 10);
     }
@@ -226,7 +235,7 @@ export async function getLastUpdateTime(): Promise<number | null> {
 
 export async function setLastUpdateTime(timestamp: number): Promise<void> {
   try {
-    await storage.setItem(KEYS.LAST_UPDATE, timestamp.toString());
+    await storage.setItem(cacheKey(KEYS.LAST_UPDATE), timestamp.toString());
   } catch (e) {
     console.warn('Failed to set last update time:', e);
   }
@@ -238,18 +247,10 @@ export async function setLastUpdateTime(timestamp: number): Promise<void> {
 
 export async function clearAllCache(): Promise<void> {
   try {
-    // Get all keys and filter cache keys
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const keys = Object.keys(window.localStorage);
-      const cacheKeys = keys.filter(key => key.startsWith(CACHE_PREFIX));
+    const allKeys = await storage.getAllKeys();
+    const cacheKeys = allKeys.filter((key: string) => key.startsWith(CACHE_PREFIX));
+    if (cacheKeys.length > 0) {
       await storage.multiRemove(cacheKeys);
-    } else {
-      // For AsyncStorage, we need to get all keys first
-      // Since multiGet/multiRemove pattern is complex, we'll clear known keys
-      await storage.removeItem(KEYS.STOCKS);
-      await storage.removeItem(KEYS.LAST_UPDATE);
-      // Note: This won't clear dynamically generated keys (stock_detail_*, strategy_detail_*, etc.)
-      // For a complete clear, we'd need to implement key enumeration
     }
   } catch (e) {
     console.warn('Failed to clear cache:', e);
@@ -259,10 +260,10 @@ export async function clearAllCache(): Promise<void> {
 export async function clearStockCache(code: string): Promise<void> {
   try {
     await storage.multiRemove([
-      `${KEYS.STOCK_DETAIL_PREFIX}${code}`,
-      `${KEYS.DIVIDEND_PREFIX}${code}`,
-      `${KEYS.NEWS_PREFIX}${code}`,
-      `${KEYS.INST_HOLD_PREFIX}${code}`,
+      cacheKey(`${KEYS.STOCK_DETAIL_PREFIX}${code}`),
+      cacheKey(`${KEYS.DIVIDEND_PREFIX}${code}`),
+      cacheKey(`${KEYS.NEWS_PREFIX}${code}`),
+      cacheKey(`${KEYS.INST_HOLD_PREFIX}${code}`),
     ]);
     // Also clear strategy details for this stock
     // Note: We'd need to enumerate keys to clear all strategy details for this stock

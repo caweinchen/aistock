@@ -250,7 +250,7 @@ def run_backtest(
     if len(bars) < 30:
         return None
 
-    initial_cash = 100_000.0
+    initial_cash = 1_000_000.0
     cash = initial_cash
     quantity = 0
     entry_price = 0.0

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { login as apiLogin, verifyToken } from '../services/api';
-import { getAuthToken, setAuthToken, clearAuthToken, setStoredUser, clearOfflineLogin } from '../services/storage';
+import { getAuthToken, setAuthToken, clearAuthToken, setStoredUser, clearOfflineLogin, setUserId, setStoredUserRole, getStoredUserRole } from '../services/storage';
 import { getInitialAuthState } from '../services/authSession';
 import { useTranslation } from '../i18n';
 
@@ -11,6 +11,7 @@ export function useAuth() {
   const [error, setError] = useState<string | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   const [tokenValidationFailed, setTokenValidationFailed] = useState(false);
+  const [role, setRole] = useState<string | null>(() => getStoredUserRole());
 
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -31,19 +32,23 @@ export function useAuth() {
       const result = await apiLogin(username, password);
       setAuthToken(result.token);
       setStoredUser(result.username);
+      setUserId(String(result.user_id || result.username));
+      setStoredUserRole(result.role);
+      setRole(result.role);
       setIsLoggedIn(true);
       
       if (result.isOffline) {
         setIsOfflineMode(true);
-        // Show offline mode warning but still allow login
         console.log('Logged in offline mode');
+      } else {
+        console.log('Logged in online mode');
       }
       
-      return true;
+      return { success: true, isOffline: !!result.isOffline };
     } catch (err) {
       const errorKey = err instanceof Error ? err.message : 'login';
       setError(t.error[errorKey as keyof typeof t.error] || t.error.login);
-      return false;
+      return { success: false, isOffline: false };
     } finally {
       setIsLoading(false);
     }
@@ -56,6 +61,7 @@ export function useAuth() {
     setError(null);
     setIsOfflineMode(false);
     setTokenValidationFailed(false);
+    setRole(null);
   }, []);
 
   const validateTokenWithServer = useCallback(async (): Promise<boolean> => {
@@ -68,6 +74,10 @@ export function useAuth() {
           return false;
         }
       } else {
+        if (result.role) {
+          setRole(result.role);
+          setStoredUserRole(result.role);
+        }
         setIsOfflineMode(false);
       }
       return result.valid;
@@ -90,6 +100,8 @@ export function useAuth() {
     isLoading,
     error,
     isOfflineMode,
+    role,
+    isAdmin: role === 'admin',
     tokenValidationFailed,
     login,
     logout,

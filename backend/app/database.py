@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, ForeignKey, Text, UniqueConstraint, inspect, text
+from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime, ForeignKey, Text, UniqueConstraint, inspect, text, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime, timezone
@@ -21,6 +21,10 @@ REQUIRED_SCHEMA_COLUMNS = {
         "high": "high FLOAT DEFAULT 0",
         "low": "low FLOAT DEFAULT 0",
     },
+    "users": {
+        "is_active": "is_active BOOLEAN DEFAULT 1 NOT NULL",
+        "role": "role VARCHAR(20) DEFAULT 'user' NOT NULL",
+    },
 }
 
 
@@ -30,6 +34,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     password = Column(String(255), nullable=False)
+    is_active = Column(Boolean, nullable=False, default=False)
+    role = Column(String(20), nullable=False, default="user")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -89,8 +95,8 @@ class FactorScoreDB(Base):
 class StrategyResultDB(Base):
     __tablename__ = "strategies"
 
-    id = Column(String(100), primary_key=True, index=True)
-    stock_code = Column(String(20), ForeignKey("stocks.code"))
+    id = Column(String(100), primary_key=True)
+    stock_code = Column(String(20), ForeignKey("stocks.code"), primary_key=True)
     name = Column(String(100), nullable=False)
     period = Column(String(50))
     return_rate = Column(Float)
@@ -121,6 +127,47 @@ class AlertItemDB(Base):
     level = Column(String(20), nullable=False)
     title = Column(String(100), nullable=False)
     message = Column(Text)
+
+
+class DividendDB(Base):
+    __tablename__ = "dividends"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_code = Column(String(20), ForeignKey("stocks.code"))
+    ann_date = Column(String(20), default="")
+    record_date = Column(String(20), default="")
+    ex_date = Column(String(20), default="")
+    pay_date = Column(String(20), default="")
+    div_cash = Column(Float, default=0)
+    bonus_share = Column(Float, default=0)
+    transfer_share = Column(Float, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class StockNewsDB(Base):
+    __tablename__ = "stock_news"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_code = Column(String(20), ForeignKey("stocks.code"))
+    title = Column(String(255), default="")
+    content = Column(Text, default="")
+    pub_time = Column(String(50), default="")
+    source = Column(String(100), default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class InstHoldDB(Base):
+    __tablename__ = "inst_hold"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stock_code = Column(String(20), ForeignKey("stocks.code"))
+    trade_date = Column(String(20), default="")
+    inst_type = Column(String(50), default="")
+    hold_amount = Column(Float, default=0)
+    hold_ratio = Column(Float, default=0)
+    change_amount = Column(Float, default=0)
+    change_ratio = Column(Float, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 def init_db():
@@ -417,24 +464,27 @@ def init_sample_data(db):
 
     # 插入用户数据 - 所有密码必须符合强密码要求（长度≥8、包含大小写字母、数字和特殊字符）
     users = [
-        ("admin", "Test@bcd!234"),
-        ("demo", "Demo@123!"),
-        ("user", "User@456!"),
+        ("admin", "Test@bcd!234", True, "admin"),
+        ("demo", "Demo@123!", True, "user"),
+        ("user", "User@456!", True, "user"),
     ]
-    for username, password in users:
+    for username, password, is_active, role in users:
         password_validation = validate_password_strength(password)
         if not password_validation["valid"]:
             raise ValueError(f"Password for user '{username}' does not meet strength requirements: {', '.join(password_validation['messages'])}")
         
         existing_user = db.query(User).filter(User.username == username).first()
         if not existing_user:
-            user = User(username=username, password=hash_password(password))
+            user = User(username=username, password=hash_password(password), is_active=is_active, role=role)
             db.add(user)
-        elif not is_password_hash(existing_user.password):
-            existing_user.password = hash_password(password)
-            existing_user.updated_at = datetime.now(timezone.utc)
-        elif not verify_password(password, existing_user.password):
-            existing_user.password = hash_password(password)
-            existing_user.updated_at = datetime.now(timezone.utc)
+        else:
+            existing_user.is_active = is_active
+            existing_user.role = role
+            if not is_password_hash(existing_user.password):
+                existing_user.password = hash_password(password)
+                existing_user.updated_at = datetime.now(timezone.utc)
+            elif not verify_password(password, existing_user.password):
+                existing_user.password = hash_password(password)
+                existing_user.updated_at = datetime.now(timezone.utc)
 
     db.commit()

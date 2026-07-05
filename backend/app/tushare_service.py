@@ -367,17 +367,24 @@ class TuShareService:
             if start_date is None:
                 start_date = (datetime.now() - timedelta(days=90)).strftime('%Y%m%d')
 
-            df = self.pro.stk_news(ts_code=ts_code, start_date=start_date, end_date=end_date,
-                                    fields='ts_code,title,content,pub_time,src')
+            # Use documented pro API 'news' when available
+            try:
+                df = self.pro.news(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            except Exception:
+                # Fallback to older/stk_news if present
+                df = getattr(self.pro, 'stk_news')(ts_code=ts_code, start_date=start_date, end_date=end_date)
+
             if df is not None and not df.empty:
                 results = []
                 for _, row in df.iterrows():
+                    # Different pro endpoints may use different column names
+                    pub_time = row.get('pub_time') or row.get('datetime') or row.get('time') or ''
                     results.append({
-                        'ts_code': row.get('ts_code'),
-                        'title': row.get('title', ''),         # 新闻标题
-                        'content': row.get('content', ''),     # 新闻内容
-                        'pub_time': row.get('pub_time', ''),   # 发布时间
-                        'source': row.get('src', ''),          # 来源
+                        'ts_code': ts_code,
+                        'title': row.get('title', ''),
+                        'content': row.get('content', ''),
+                        'pub_time': pub_time,
+                        'src': row.get('src') or row.get('channels') or '',
                     })
                 return results
             return []
@@ -435,27 +442,131 @@ class TuShareService:
             if start_date is None:
                 start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
 
-            df = self.pro.inst_hold(ts_code=ts_code, start_date=start_date, end_date=end_date,
-                                     fields='ts_code,trade_date,inst_type,hold_amount,hold_ratio,change_amount,change_ratio')
+            # Use top10_holders API when available (documented)
+            try:
+                df = self.pro.top10_holders(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            except Exception:
+                # Fallback to inst_hold if top10_holders not present
+                df = getattr(self.pro, 'inst_hold')(ts_code=ts_code, start_date=start_date, end_date=end_date)
+
             if df is not None and not df.empty:
-                # 按时间倒序排序
-                df = df.sort_values(by='trade_date', ascending=False)
+                # top10_holders returns end_date as the holding period end
                 results = []
                 for _, row in df.iterrows():
+                    trade_date = row.get('end_date') or row.get('trade_date') or ''
                     results.append({
-                        'ts_code': row.get('ts_code'),
-                        'trade_date': row.get('trade_date', ''),       # 交易日期
-                        'inst_type': row.get('inst_type', ''),         # 机构类型
-                        'hold_amount': float(row.get('hold_amount', 0) or 0),   # 持有数量（万股）
-                        'hold_ratio': float(row.get('hold_ratio', 0) or 0),     # 持有比例（%）
-                        'change_amount': float(row.get('change_amount', 0) or 0), # 变动数量（万股）
-                        'change_ratio': float(row.get('change_ratio', 0) or 0),   # 变动比例（%）
+                        'ts_code': ts_code,
+                        'trade_date': trade_date,
+                        'holder_name': row.get('holder_name') or row.get('holder_name') or '',
+                        'hold_amount': float(row.get('hold_amount', 0) or 0),
+                        'hold_ratio': float(row.get('hold_ratio', 0) or 0),
+                        'hold_change': float(row.get('hold_change', 0) or 0),
                     })
+                # sort descending by trade_date if available
+                try:
+                    results.sort(key=lambda r: r.get('trade_date', ''), reverse=True)
+                except Exception:
+                    pass
                 return results
             return []
         except Exception as e:
             logger.error(f"获取机构持仓数据失败: {e}")
             return []
+
+    # 交易日历缓存：{ "YYYYMM": set(交易日字符串) }
+    _trade_cal_cache: Dict[str, set] = {}
+
+    def get_trade_calendar(self, year: int, month: int) -> set:
+        """
+        获取指定年月的交易日历（带缓存）
+
+        Args:
+            year: 年份，如 2026
+            month: 月份，1-12
+
+        Returns:
+            该月所有交易日的集合，格式 {"YYYYMMDD", ...}
+        """
+        cache_key = f"{year}{month:02d}"
+        if cache_key in self._trade_cal_cache:
+            return self._trade_cal_cache[cache_key]
+
+        try:
+            if not self.pro:
+                logger.warning("TuShare Pro 未初始化，无法获取交易日历")
+                return set()
+
+            start_date = f"{year}{month:02d}01"
+            if month == 12:
+                end_date = f"{year}1231"
+            else:
+                end_date = f"{year}{(month + 1):02d}01"
+
+            df = self.pro.trade_cal(exchange='SSE', start_date=start_date, end_date=end_date)
+            if df is None or df.empty:
+                return set()
+
+            trading_days = set()
+            for _, row in df.iterrows():
+                if row.get('is_open') == 1:
+                    trade_date = str(row.get('cal_date', ''))
+                    if trade_date:
+                        trading_days.add(trade_date)
+
+            self._trade_cal_cache[cache_key] = trading_days
+            logger.info(f"已缓存 {year}年{month}月交易日历: {len(trading_days)} 个交易日")
+            return trading_days
+        except Exception as e:
+            logger.error(f"获取交易日历失败: {e}")
+            return set()
+
+    def is_trading_day(self, date_obj: datetime = None) -> bool:
+        """
+        判断指定日期是否为交易日（考虑法定节假日）
+
+        Args:
+            date_obj: 日期对象，为空则取今天
+
+        Returns:
+            True 如果是交易日
+        """
+        if date_obj is None:
+            date_obj = datetime.now()
+
+        weekday = date_obj.weekday()
+        if weekday >= 5:
+            return False
+
+        trading_days = self.get_trade_calendar(date_obj.year, date_obj.month)
+        if not trading_days:
+            return True
+
+        date_str = date_obj.strftime('%Y%m%d')
+        return date_str in trading_days
+
+    def get_previous_trading_day(self, date_obj: datetime = None) -> datetime:
+        """
+        获取上一个交易日
+
+        Args:
+            date_obj: 起始日期，为空则取今天
+
+        Returns:
+            上一个交易日的 datetime 对象
+        """
+        if date_obj is None:
+            date_obj = datetime.now()
+
+        previous = date_obj - timedelta(days=1)
+        while previous.weekday() >= 5 or not self.is_trading_day(previous):
+            previous -= timedelta(days=1)
+            if (date_obj - previous).days > 30:
+                previous = date_obj - timedelta(days=1)
+                while previous.weekday() >= 5:
+                    previous -= timedelta(days=1)
+                break
+
+        return previous
 
 
 # 全局实例

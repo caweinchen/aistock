@@ -1,13 +1,17 @@
-export type StartupScreen = 'login';
+import { getOfflineToken, isLoggedIn as hasAuthToken } from './storage';
+
+export type StartupScreen = 'login' | 'home';
 
 export interface StartupRouteState {
-  isLoggedIn: false;
+  isLoggedIn: boolean;
   currentScreen: StartupScreen;
 }
 
 export function getStartupRouteState(): StartupRouteState {
+  const hasLocalSession = hasAuthToken() || !!getOfflineToken();
+
   return {
-    isLoggedIn: false,
-    currentScreen: 'login',
+    isLoggedIn: hasLocalSession,
+    currentScreen: hasLocalSession ? 'home' : 'login',
   };
 }

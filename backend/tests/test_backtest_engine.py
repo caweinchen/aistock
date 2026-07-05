@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from backend.app.backtest_engine import build_strategy_summaries, normalize_price_bars, run_backtest
@@ -12,6 +13,7 @@ from backend.app.main import (
     engine_result_to_detail,
     engine_result_to_strategy,
     ensure_price_history,
+    _history_needs_refresh,
 )
 
 
@@ -91,7 +93,14 @@ class BacktestApiConversionTests(unittest.TestCase):
     def test_custom_strategy_detail_reuses_saved_lookback(self):
         prices = [10 + i * 0.2 for i in range(120)]
         history = [
-            PricePoint(date=make_bar(i + 1, price)["date"], close=price, volume=1000 + i * 10)
+            PricePoint(
+                date=make_bar(i + 1, price)["date"],
+                open=price - 0.2,
+                high=price + 0.5,
+                low=price - 0.5,
+                close=price,
+                volume=1000 + i * 10,
+            )
             for i, price in enumerate(prices)
         ]
         detail = StockDetail(
@@ -152,6 +161,9 @@ class BacktestApiConversionTests(unittest.TestCase):
             def all(self):
                 return self.rows
 
+            def first(self):
+                return None
+
             def delete(self):
                 self.rows.clear()
 
@@ -187,8 +199,77 @@ class BacktestApiConversionTests(unittest.TestCase):
 
         tushare.get_daily_price.assert_called_once()
         self.assertEqual([row.date for row in history], ["2024-01-01", "2024-01-02"])
-        self.assertTrue(all(isinstance(row, PricePointDB) for row in history))
+        self.assertEqual([row.close for row in history], [10.0, 10.2])
         self.assertEqual(db.commits, 1)
+
+    def test_history_does_not_refresh_after_latest_market_close_update(self):
+        history = [PricePointDB(
+            stock_code="600519",
+            date="2024-01-02",
+            open=10.0,
+            high=10.5,
+            low=9.8,
+            close=10.2,
+            volume=1200,
+        )]
+        stock = Mock(updated_at=datetime(2024, 1, 2, 7, 1, tzinfo=timezone.utc))
+
+        with patch("backend.app.main._is_trading_time", return_value=False), patch(
+            "backend.app.main._last_market_session_end_time",
+            return_value=datetime(2024, 1, 2, 15, 0),
+        ):
+            self.assertFalse(_history_needs_refresh(history, stock))
+
+    def test_history_does_not_refresh_during_midday_break_after_morning_close_update(self):
+        history = [PricePointDB(
+            stock_code="600519",
+            date="2024-01-02",
+            open=10.0,
+            high=10.5,
+            low=9.8,
+            close=10.2,
+            volume=1200,
+        )]
+        stock = Mock(updated_at=datetime(2024, 1, 2, 3, 31, tzinfo=timezone.utc))
+
+        with patch("backend.app.main._is_trading_time", return_value=False), patch(
+            "backend.app.main._last_market_session_end_time",
+            return_value=datetime(2024, 1, 2, 11, 30),
+        ):
+            self.assertFalse(_history_needs_refresh(history, stock))
+
+    def test_history_does_not_refresh_during_trading_when_updated_within_five_minutes(self):
+        history = [PricePointDB(
+            stock_code="600519",
+            date=datetime.now().strftime("%Y-%m-%d"),
+            open=10.0,
+            high=10.5,
+            low=9.8,
+            close=10.2,
+            volume=1200,
+        )]
+        stock = Mock(updated_at=datetime.now(timezone.utc) - timedelta(minutes=4))
+
+        with patch("backend.app.main._is_trading_time", return_value=True):
+            self.assertFalse(_history_needs_refresh(history, stock))
+
+    def test_history_refresh_decision_does_not_call_tushare_calendar_when_history_exists(self):
+        history = [PricePointDB(
+            stock_code="600519",
+            date="2026-07-03",
+            open=1190.0,
+            high=1200.0,
+            low=1188.0,
+            close=1194.45,
+            volume=1000,
+        )]
+        stock = Mock(updated_at=datetime(2026, 7, 4, 19, 41, 32))
+
+        with patch(
+            "backend.app.main.get_initialized_tushare_service",
+            side_effect=AssertionError("refresh decision should not call TuShare calendar"),
+        ):
+            self.assertFalse(_history_needs_refresh(history, stock))
 
 
 if __name__ == "__main__":

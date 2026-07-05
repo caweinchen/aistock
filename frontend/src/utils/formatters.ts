@@ -18,6 +18,32 @@ export function formatUpdatedAt(value: string, locale: string = 'zh-CN', prefix:
   return `${prefix} ${date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+export function formatLastUpdated(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) {
+    return '刚刚更新';
+  } else if (diffMins < 60) {
+    return `${diffMins}分钟前更新`;
+  } else if (diffMins < 1440) {
+    const diffHours = Math.floor(diffMins / 60);
+    return `${diffHours}小时前更新`;
+  } else {
+    const diffDays = Math.floor(diffMins / 1440);
+    if (diffDays === 1) {
+      return '昨天更新';
+    }
+    return `${diffDays}天前更新`;
+  }
+}
+
 export function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {

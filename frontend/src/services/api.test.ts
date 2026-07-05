@@ -126,14 +126,22 @@ describe('api cache policy', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('returns null stock detail without fetching when cache is missing', async () => {
-    mockLocalDb();
-    const fetchSpy = vi.fn();
+  it('fetches and caches stock detail when cache is missing', async () => {
+    const saveStockDetail = vi.fn();
+    mockLocalDb({
+      saveStockDetail,
+    });
+    const fetchSpy = vi.fn(async (url: string) => {
+      if (url.endsWith(`/api/stocks/${stock.code}`)) {
+        return { ok: true, status: 200, json: async () => detail };
+      }
+      return { ok: false, status: 404, json: async () => ({}) };
+    });
     vi.stubGlobal('fetch', fetchSpy);
     const { getStockDetail } = await import('./api');
 
-    await expect(getStockDetail(stock.code)).resolves.toEqual({ data: null, fromCache: true });
-    expect(fetchSpy).not.toHaveBeenCalled();
+    await expect(getStockDetail(stock.code)).resolves.toEqual({ data: detail, fromCache: false });
+    expect(saveStockDetail).toHaveBeenCalledWith(stock.code, detail);
   });
 
   it('returns empty secondary sections without fetching when cache is missing', async () => {
@@ -182,6 +190,22 @@ describe('api cache policy', () => {
     });
   });
 
+  it('marks refresh as offline when React Native reports Network request failed', async () => {
+    mockLocalDb({
+      getStocks: vi.fn(async () => [stock]),
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new TypeError('Network request failed');
+    }));
+    const { refreshAllStocks } = await import('./api');
+
+    await expect(refreshAllStocks()).resolves.toEqual({
+      data: [stock],
+      error: 'Offline - showing cached data',
+      isOffline: true,
+    });
+  });
+
   it('refreshing stock detail also caches strategy detail for offline viewing', async () => {
     const saveStrategyDetail = vi.fn();
     mockLocalDb({
@@ -206,6 +230,65 @@ describe('api cache policy', () => {
       { headers: { Authorization: 'Bearer token' } },
     );
     expect(saveStrategyDetail).toHaveBeenCalledWith(stock.code, strategyDetail.strategy.id, strategyDetail);
+  });
+
+  it('falls back to offline login when the backend request fails and local credentials match', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const setOfflineToken = vi.fn();
+    const setAuthToken = vi.fn();
+    const setStoredUser = vi.fn();
+    vi.doMock('./storage', () => ({
+      getApiBaseUrl: () => 'http://server.test',
+      getAuthToken: () => null,
+      verifyOfflineLogin: vi.fn(async () => true),
+      setOfflineToken,
+      setStoredUser,
+      setAuthToken,
+    }));
+    mockLocalDb();
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new TypeError('Network request failed');
+    }));
+    const { login } = await import('./api');
+
+    const result = await login('Test', 'Test@bcd!234');
+
+    expect(result).toMatchObject({
+      username: 'Test',
+      role: 'user',
+      isOffline: true,
+    });
+    expect(result.token).toMatch(/^offline_Test_/);
+    expect(setOfflineToken).toHaveBeenCalledWith(result.token);
+    expect(setAuthToken).toHaveBeenCalledWith(result.token);
+    expect(setStoredUser).toHaveBeenCalledWith('Test');
+  });
+
+  it('falls back to offline login when the backend returns a service unavailable response', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.doMock('./storage', () => ({
+      getApiBaseUrl: () => 'http://server.test',
+      getAuthToken: () => null,
+      verifyOfflineLogin: vi.fn(async () => true),
+      setOfflineToken: vi.fn(),
+      setStoredUser: vi.fn(),
+      setAuthToken: vi.fn(),
+    }));
+    mockLocalDb();
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({ detail: 'Service unavailable' }),
+    })));
+    const { login } = await import('./api');
+
+    await expect(login('Test', 'Test@bcd!234')).resolves.toMatchObject({
+      username: 'Test',
+      isOffline: true,
+    });
   });
 
 });

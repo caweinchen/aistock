@@ -119,8 +119,10 @@ export interface BacktestRequest {
 
 export interface LoginResponse {
   token: string;
-  user_id: string;
-  expires_at: string;
+  username: string;
+  user_id: number;
+  role: 'admin' | 'user';
+  is_active: boolean;
 }
 
 export interface LoginRequest {
@@ -131,4 +133,13 @@ export interface LoginRequest {
 export interface ErrorResponse {
   error: string;
   message: string;
+}
+
+export interface AppUser {
+  id: number;
+  username: string;
+  is_active: boolean;
+  role: 'admin' | 'user';
+  created_at?: string | null;
+  updated_at?: string | null;
 }

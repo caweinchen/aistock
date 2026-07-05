@@ -6,9 +6,10 @@ import { AlertCard } from '../components/AlertCard';
 import { PriceChart } from '../components/PriceChart';
 import type { ResearchSnapshot, StockDetail, StrategyDetail, InstHoldRecord, DividendRecord, StockNews } from '../types';
 import { translateDividendPlan, translateInstType, translateNewsSource, useTranslation } from '../i18n';
-import { formatPrice, formatPercent, getChangeColor, getScoreColor } from '../utils/formatters';
+import { formatPrice, formatPercent, formatLastUpdated, getChangeColor, getScoreColor } from '../utils/formatters';
 import { useState, useEffect } from 'react';
 import { getStockDetail, getStrategyDetail, getStockInstHold, getStockDividend, getStockNews } from '../services/api';
+import { isNetworkFailure } from '../services/network';
 
 interface StockDetailScreenProps {
   stockCode: string;
@@ -139,7 +140,7 @@ export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchS
       }
     } catch (err) {
       setError(t.error.fetchStockDetail);
-      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      const isNetworkError = isNetworkFailure(err);
       setIsOffline(isNetworkError);
     } finally {
       setIsLoading(false);
@@ -279,6 +280,9 @@ export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchS
               {stock.change_percent >= 0 ? '+' : ''}{formatPercent(stock.change_percent)}
             </Text>
           </View>
+          {detail.updated_at && (
+            <Text style={styles.lastUpdatedText}>{formatLastUpdated(detail.updated_at)}</Text>
+          )}
         </View>
         <View style={[styles.scoreBlock, { borderColor: scoreColor }]}>
           <Text style={[styles.scoreValue, { color: scoreColor }]}>{stock.score}</Text>
@@ -575,6 +579,7 @@ const styles = StyleSheet.create({
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
   },
   priceBlock: { flex: 1, gap: 8 },
+  lastUpdatedText: { color: '#9CA3AF', fontSize: 12 },
   priceValue: { color: '#162033', fontSize: 32, fontWeight: '800' },
   changeBlock: { alignItems: 'center', flexDirection: 'row', gap: 6 },
   changeValue: { fontSize: 16, fontWeight: '700' },

@@ -2,11 +2,12 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { Globe, Lock, Mail, Server, ShieldCheck } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { register as apiRegister } from '../services/api';
 import { useTranslation } from '../i18n';
 import type { Locale } from '../i18n/types';
 
 interface LoginScreenProps {
-  onSuccess?: () => void;
+  onSuccess?: (state?: { isOffline?: boolean }) => void;
   onOpenSettings?: () => void;
   onOpenTerms?: () => void;
   onOpenPrivacy?: () => void;
@@ -14,16 +15,21 @@ interface LoginScreenProps {
 
 export function LoginScreen({ onSuccess, onOpenSettings, onOpenTerms, onOpenPrivacy }: LoginScreenProps) {
   const { t, locale, setLocale } = useTranslation();
-  const { isLoggedIn, isLoading, error, login } = useAuth();
+  const { isLoggedIn, isLoading, error, isOfflineMode, login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [registerMessage, setRegisterMessage] = useState<string | null>(null);
+  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [isRegistering, setIsRegistering] = useState(false);
 
   useEffect(() => {
     if (isLoggedIn && onSuccess) {
-      onSuccess();
+      onSuccess({ isOffline: isOfflineMode });
     }
-  }, [isLoggedIn, onSuccess]);
+  }, [isLoggedIn, isOfflineMode, onSuccess]);
 
   const cycleLanguage = () => {
     const locales: Locale[] = ['zh', 'zh-Hant', 'en'];
@@ -43,9 +49,33 @@ export function LoginScreen({ onSuccess, onOpenSettings, onOpenTerms, onOpenPriv
 
   const handleLogin = async () => {
     if (!username.trim() || !password.trim()) return;
-    const success = await login(username, password);
-    if (success && onSuccess) {
-      onSuccess();
+    const result = await login(username, password);
+    if (result.success && onSuccess) {
+      onSuccess({ isOffline: result.isOffline });
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!username.trim() || !password.trim()) return;
+    if (password !== confirmPassword) {
+      setRegisterError(t.login.passwordMismatch);
+      return;
+    }
+    setIsRegistering(true);
+    setRegisterError(null);
+    setRegisterMessage(null);
+    try {
+      await apiRegister(username.trim(), password);
+      setRegisterMessage(t.login.registerSuccess);
+      setPassword('');
+      setConfirmPassword('');
+      setMode('login');
+    } catch (err) {
+      const key = err instanceof Error ? err.message : 'register';
+      const fallback = key === 'usernameExists' ? t.login.usernameExists : t.login.registerFailed;
+      setRegisterError(t.error[key as keyof typeof t.error] || fallback);
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -73,8 +103,8 @@ export function LoginScreen({ onSuccess, onOpenSettings, onOpenTerms, onOpenPriv
         <View style={styles.logo}>
           <ShieldCheck size={48} color="#0F8B8D" />
         </View>
-        <Text style={styles.welcomeText}>{t.login.welcome}</Text>
-        <Text style={styles.subtitle}>{t.login.subtitle}</Text>
+        <Text style={styles.welcomeText}>{mode === 'register' ? t.login.registerTitle : t.login.welcome}</Text>
+        <Text style={styles.subtitle}>{mode === 'register' ? t.login.registerSubtitle : t.login.subtitle}</Text>
 
         <View style={styles.form}>
           <View style={styles.inputGroup}>
@@ -100,22 +130,43 @@ export function LoginScreen({ onSuccess, onOpenSettings, onOpenTerms, onOpenPriv
               placeholder={t.login.password}
               placeholderTextColor="#9CA3AF"
               secureTextEntry={!showPassword}
-              onSubmitEditing={handleLogin}
+              onSubmitEditing={mode === 'register' ? handleRegister : handleLogin}
             />
             <Pressable onPress={() => setShowPassword(!showPassword)}>
               <Text style={styles.toggleText}>{showPassword ? t.login.hide : t.login.show}</Text>
             </Pressable>
           </View>
 
-          {error && (
+          {mode === 'register' ? (
+            <View style={styles.inputGroup}>
+              <Lock size={18} color="#6B7280" />
+              <TextInput
+                style={styles.input}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder={t.login.confirmPassword}
+                placeholderTextColor="#9CA3AF"
+                secureTextEntry={!showPassword}
+                onSubmitEditing={handleRegister}
+              />
+            </View>
+          ) : null}
+
+          {(error || registerError || registerMessage) && (
             <View style={styles.errorMessage}>
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={registerMessage ? styles.successText : styles.errorText}>{registerMessage || registerError || error}</Text>
             </View>
           )}
 
-          <Pressable style={styles.loginButton} onPress={handleLogin} disabled={isLoading}>
-            {isLoading ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
-            <Text style={styles.loginButtonText}>{isLoading ? t.login.loggingIn : t.login.login}</Text>
+          <Pressable
+            style={styles.loginButton}
+            onPress={mode === 'register' ? handleRegister : handleLogin}
+            disabled={isLoading || isRegistering}
+          >
+            {isLoading || isRegistering ? <ActivityIndicator size="small" color="#FFFFFF" /> : null}
+            <Text style={styles.loginButtonText}>
+              {mode === 'register' ? (isRegistering ? t.login.submitting : t.login.submitRegister) : (isLoading ? t.login.loggingIn : t.login.login)}
+            </Text>
           </Pressable>
 
           <Pressable style={styles.forgotButton}>
@@ -125,9 +176,13 @@ export function LoginScreen({ onSuccess, onOpenSettings, onOpenTerms, onOpenPriv
       </View>
 
       <View style={styles.registerSection}>
-        <Text style={styles.registerText}>{t.login.noAccount}</Text>
-        <Pressable>
-          <Text style={styles.registerLink}>{t.login.signUp}</Text>
+        <Text style={styles.registerText}>{mode === 'register' ? t.login.alreadyHaveAccount : t.login.noAccount}</Text>
+        <Pressable onPress={() => {
+          setMode((current) => current === 'login' ? 'register' : 'login');
+          setRegisterError(null);
+          setRegisterMessage(null);
+        }}>
+          <Text style={styles.registerLink}>{mode === 'register' ? t.login.login : t.login.signUp}</Text>
         </Pressable>
       </View>
 
@@ -215,6 +270,7 @@ const styles = StyleSheet.create({
   toggleText: { color: '#0F8B8D', fontSize: 13 },
   errorMessage: { padding: 12, backgroundColor: '#FEF3F2', borderRadius: 8 },
   errorText: { color: '#B42318', fontSize: 13 },
+  successText: { color: '#047857', fontSize: 13 },
   loginButton: {
     alignItems: 'center',
     backgroundColor: '#0F8B8D',

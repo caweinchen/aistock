@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StockSummary, StockDetail, StrategyDetail, StrategyResult, BacktestRequest } from '../types';
 import { getStocks, searchStocks, getStockDetail, addToWatchlist, removeFromWatchlist, getStrategyDetail, createBacktest, refreshAllStocks } from '../services/api';
 import { useTranslation } from '../i18n';
-import { checkNetwork } from '../services/network';
+import { checkNetwork, isNetworkFailure } from '../services/network';
 
 export function useStockData() {
   const { t } = useTranslation();
@@ -29,39 +29,50 @@ export function useStockData() {
 
     try {
       const networkStatus = await checkNetwork();
-      setIsOffline(networkStatus === 'offline');
-      
-      const result = await getStocks(false);
-      if (result.data && result.data.length > 0) {
-        setStocks(result.data);
-        setWatchlistCodes(new Set(result.data.map((stock) => stock.code)));
-        setFromCache(result.fromCache);
-        setIsOffline(result.isOffline ?? false);
-        
-        if (!selectedCodeRef.current && result.data.length > 0) {
-          await loadStockDetail(result.data[0].code);
+      const cachedResult = await getStocks(false);
+      const backendOffline = networkStatus !== 'online';
+
+      if (cachedResult.data && cachedResult.data.length > 0) {
+        setStocks(cachedResult.data);
+        setWatchlistCodes(new Set(cachedResult.data.map((stock) => stock.code)));
+        setFromCache(true);
+        setIsOffline(backendOffline || (cachedResult.isOffline ?? false));
+
+        if (!selectedCodeRef.current && cachedResult.data.length > 0) {
+          await loadStockDetail(cachedResult.data[0].code);
         } else if (selectedCodeRef.current) {
-          const exists = result.data.find(s => s.code === selectedCodeRef.current);
+          const exists = cachedResult.data.find(s => s.code === selectedCodeRef.current);
           if (exists) {
             await loadStockDetail(selectedCodeRef.current);
-          } else if (result.data.length > 0) {
-            await loadStockDetail(result.data[0].code);
+          } else if (cachedResult.data.length > 0) {
+            await loadStockDetail(cachedResult.data[0].code);
           }
         }
-      } else {
+      } else if (backendOffline) {
         setStocks([]);
         setWatchlistCodes(new Set());
         setFromCache(false);
-        
-        if (result.isOffline) {
-          setOfflineNoCache(true);
+        setOfflineNoCache(true);
+        setIsOffline(backendOffline);
+      } else {
+        const onlineResult = await getStocks(true);
+        const data = onlineResult.data ?? [];
+        setStocks(data);
+        setWatchlistCodes(new Set(data.map((stock) => stock.code)));
+        setFromCache(false);
+        setOfflineNoCache(data.length === 0);
+        setIsOffline(false);
+
+        if (!selectedCodeRef.current && data.length > 0) {
+          await loadStockDetail(data[0].code);
         }
       }
     } catch (err) {
       setStocks([]);
       setWatchlistCodes(new Set());
-      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      const isNetworkError = isNetworkFailure(err);
       setOfflineNoCache(isNetworkError);
+      setIsOffline(isNetworkError);
       const errorKey = err instanceof Error ? err.message : 'fetchStocks';
       setError(t.error[errorKey as keyof typeof t.error] || t.error.fetchStocks);
     } finally {
@@ -77,31 +88,31 @@ export function useStockData() {
 
     try {
       const result = await refreshAllStocks();
-      
+
       if (result.tokenInvalid) {
         setTokenInvalid(true);
         setIsLoadingStocks(false);
         return;
       }
-      
+
       const payload = result.data || [];
       setStocks(payload);
       setWatchlistCodes(new Set(payload.map((stock) => stock.code)));
       setFromCache(false);
       setIsOffline(false);
-      
+
       if (result.error) {
         setError(result.error);
-        setIsOffline(result.isOffline ?? false);
+        setIsOffline((current) => result.isOffline ?? current);
       }
-      
+
       if (selectedCodeRef.current) {
         await loadStockDetail(selectedCodeRef.current, true);
       }
     } catch (err) {
       const errorKey = err instanceof Error ? err.message : 'refreshAllStocks';
       setError(t.error[errorKey as keyof typeof t.error] || t.error.refreshAllStocks);
-      const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+      const isNetworkError = isNetworkFailure(err);
       setIsOffline(isNetworkError);
     } finally {
       setIsLoadingStocks(false);
@@ -118,22 +129,38 @@ export function useStockData() {
         const result = await searchStocks(query);
         setStocks(result.data);
         setFromCache(result.fromCache);
-        setIsOffline(result.isOffline ?? false);
+        setIsOffline((current) => result.isOffline ?? current);
       } else {
-        const result = await getStocks(false);
-        const data = result.data ?? [];
-        setStocks(data);
-        setWatchlistCodes(new Set(data.map((stock) => stock.code)));
-        setFromCache(result.fromCache);
-        setIsOffline(result.isOffline ?? false);
-      }
+        try {
+          const result = await getStocks(true);
+          const data = result.data ?? [];
+          setStocks(data);
+          setWatchlistCodes(new Set(data.map((stock) => stock.code)));
+          setFromCache(false);
+          setIsOffline(false);
 
-      if (stocks.length > 0 && !selectedCodeRef.current) {
-        await loadStockDetail(stocks[0].code);
+          if (!selectedCodeRef.current && data.length > 0) {
+            await loadStockDetail(data[0].code);
+          }
+        } catch (serverErr) {
+          console.log('Server connection failed during refresh, falling back to cache:', serverErr);
+          const cachedResult = await getStocks(false);
+          const data = cachedResult.data ?? [];
+          setStocks(data);
+          setWatchlistCodes(new Set(data.map((stock) => stock.code)));
+          setFromCache(true);
+          setIsOffline(true);
+
+          if (!selectedCodeRef.current && data.length > 0) {
+            await loadStockDetail(data[0].code);
+          }
+        }
       }
     } catch (err) {
       const errorKey = err instanceof Error ? err.message : 'fetchStocks';
       setError(t.error[errorKey as keyof typeof t.error] || t.error.fetchStocks);
+      const isNetworkError = isNetworkFailure(err);
+      setIsOffline(isNetworkError);
     } finally {
       setIsLoadingStocks(false);
     }
@@ -142,9 +169,9 @@ export function useStockData() {
   const loadStockDetail = useCallback(async (code: string, forceRefresh = false) => {
     selectedCodeRef.current = code;
     setSelectedCode(code);
-    
+
     const cachedDetail = detailCacheRef.current[code];
-    
+
     if (cachedDetail && !forceRefresh) {
       setDetail(cachedDetail);
       setFromCache(true);
@@ -156,20 +183,20 @@ export function useStockData() {
     try {
       const result = await getStockDetail(code, forceRefresh);
       const payload = result.data;
-      
+
       if (payload) {
         detailCacheRef.current[code] = payload;
         if (selectedCodeRef.current === code) {
           setDetail(payload);
           setFromCache(result.fromCache);
-          setIsOffline(result.isOffline ?? false);
+          setIsOffline((current) => result.isOffline ?? current);
         }
       }
     } catch (err) {
       if (!cachedDetail || forceRefresh) {
         const errorKey = err instanceof Error ? err.message : 'fetchStockDetail';
         setError(t.error[errorKey as keyof typeof t.error] || t.error.fetchStockDetail);
-        const isNetworkError = err instanceof TypeError && err.message.includes('fetch');
+        const isNetworkError = isNetworkFailure(err);
         setIsOffline(isNetworkError);
       }
     } finally {
@@ -179,17 +206,25 @@ export function useStockData() {
     }
   }, [t]);
 
-  const toggleWatchlist = useCallback(async (stock: StockSummary) => {
+  const toggleWatchlist = useCallback(async (stock: StockSummary): Promise<StockSummary[] | null> => {
     const isInWatchlist = watchlistCodes.has(stock.code);
     setError(null);
 
     try {
-      const payload = isInWatchlist 
+      const payload = isInWatchlist
         ? await removeFromWatchlist(stock.code)
         : await addToWatchlist(stock.code);
-      
+
+      setStocks(payload);
       setWatchlistCodes(new Set(payload.map((item) => item.code)));
-      
+      setFromCache(false);
+      setIsOffline(false);
+
+      if (!isInWatchlist) {
+        await loadStockDetail(stock.code, true);
+        return payload;
+      }
+
       if (!payload.find((item) => item.code === selectedCode)) {
         if (payload[0]) {
           await loadStockDetail(payload[0].code);
@@ -199,16 +234,19 @@ export function useStockData() {
           setDetail(null);
         }
       }
+
+      return payload;
     } catch (err) {
       const errorKey = err instanceof Error ? err.message : 'addWatchlist';
       setError(t.error[errorKey as keyof typeof t.error] || t.error.addWatchlist);
+      return null;
     }
   }, [loadStockDetail, selectedCode, watchlistCodes, t]);
 
   const loadStrategyDetail = useCallback(async (strategyId: string): Promise<StrategyDetail | undefined> => {
     if (!selectedCode) return undefined;
 
-    // 使用策略详情缓存
+    // 浣跨敤绛栫暐璇︽儏缂撳瓨
     const cacheKey = `${selectedCode}:${strategyId}`;
     const cached = strategyDetailCacheRef.current[cacheKey];
     if (cached) return cached;

@@ -1,7 +1,7 @@
 import { Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useState, useEffect } from 'react';
-import { Bell, Globe, LogOut, Search, Settings, User, X } from 'lucide-react-native';
+import { Bell, Globe, LogOut, Search, Settings, ShieldCheck, TrendingUp, User, X, Wifi, WifiOff } from 'lucide-react-native';
 import { I18nProvider, useTranslation, type Locale } from './src/i18n';
 import { initStorage } from './src/services/storage';
 import { HomeScreen } from './src/pages/HomeScreen';
@@ -10,11 +10,13 @@ import { SettingsScreen } from './src/pages/SettingsScreen';
 import { ProfileScreen } from './src/pages/ProfileScreen';
 import { LegalScreen } from './src/pages/LegalScreen';
 import { StockDetailScreen } from './src/pages/StockDetailScreen';
-import { clearAuthToken, getAuthToken } from './src/services/storage';
+import { UserManagementScreen } from './src/pages/UserManagementScreen';
+import { clearAuthToken, getStoredUser, getStoredUserRole, getUserId } from './src/services/storage';
 import { getStartupRouteState } from './src/services/startupRoute';
+import { createSessionResetState, createUserSessionKey } from './src/services/sessionState';
 import type { ResearchSnapshot } from './src/types';
 
-type Screen = 'login' | 'home' | 'settings' | 'login-settings' | 'profile' | 'stock-detail' | 'terms' | 'privacy';
+type Screen = 'login' | 'home' | 'settings' | 'login-settings' | 'profile' | 'stock-detail' | 'terms' | 'privacy' | 'user-management';
 
 type LegalType = 'terms' | 'privacy';
 
@@ -35,6 +37,9 @@ export default function App() {
   const [selectedStockCode, setSelectedStockCode] = useState<string | undefined>();
   const [researchSnapshot, setResearchSnapshot] = useState<ResearchSnapshot | null>(null);
   const [tokenInvalid, setTokenInvalid] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [sessionKey, setSessionKey] = useState(() => createUserSessionKey(getStoredUser(), getUserId()));
+  const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -64,6 +69,9 @@ export default function App() {
   };
   const goToLoginSettings = () => setCurrentScreen('login-settings');
   const goToProfile = () => setCurrentScreen('profile');
+  const goToUserManagement = () => {
+    if (isAdmin) setCurrentScreen('user-management');
+  };
   const goToTerms = () => {
     setCurrentScreen('terms');
     setScreenParams({ legalType: 'terms' });
@@ -79,15 +87,36 @@ export default function App() {
     setCurrentScreen('stock-detail');
   };
 
-  const handleLoginSuccess = () => {
+  const handleLoginSuccess = (state?: { isOffline?: boolean }) => {
+    const resetState = createSessionResetState(refreshKey);
     setIsLoggedIn(true);
+    setIsAdmin(getStoredUserRole() === 'admin');
+    setIsOffline(state?.isOffline ?? false);
+    setSessionKey(createUserSessionKey(getStoredUser(), getUserId()));
+    setScreenParams(resetState.screenParams);
+    setRefreshKey(resetState.refreshKey);
+    setIsSearchVisible(resetState.isSearchVisible);
+    setSearchQuery(resetState.searchQuery);
+    setPendingSearchQuery(resetState.pendingSearchQuery);
+    setSelectedStockCode(resetState.selectedStockCode);
+    setResearchSnapshot(resetState.researchSnapshot);
     setCurrentScreen('home');
     setTokenInvalid(false);
   };
 
   const handleLogout = () => {
+    const resetState = createSessionResetState(refreshKey);
     clearAuthToken();
     setIsLoggedIn(false);
+    setIsAdmin(false);
+    setSessionKey(createUserSessionKey(null, null));
+    setScreenParams(resetState.screenParams);
+    setRefreshKey(resetState.refreshKey);
+    setIsSearchVisible(resetState.isSearchVisible);
+    setSearchQuery(resetState.searchQuery);
+    setPendingSearchQuery(resetState.pendingSearchQuery);
+    setSelectedStockCode(resetState.selectedStockCode);
+    setResearchSnapshot(resetState.researchSnapshot);
     setCurrentScreen('login');
     setTokenInvalid(false);
   };
@@ -172,6 +201,8 @@ export default function App() {
         return (
           <SettingsScreen onBack={goToHome} onConfigSaved={handleConfigSaved} />
         );
+      case 'user-management':
+        return <UserManagementScreen isAdmin={isAdmin} onBack={goToHome} />;
       case 'terms':
       case 'privacy':
         return (
@@ -194,7 +225,7 @@ export default function App() {
       default:
         return (
           <HomeScreen
-            key={refreshKey}
+            key={`${sessionKey}:${refreshKey}`}
             pendingSearchQuery={pendingSearchQuery}
             selectedStockCode={selectedStockCode}
             onSelectedStockCodeChange={setSelectedStockCode}
@@ -204,6 +235,8 @@ export default function App() {
             onLogout={handleLogout}
             onOpenStockDetail={goToStockDetail}
             onTokenInvalid={handleTokenInvalid}
+            onOfflineChange={setIsOffline}
+            onWatchlistUpdated={handleClearSearch}
           />
         );
     }
@@ -218,8 +251,11 @@ export default function App() {
             <AppHeader
               onOpenSettings={goToSettings}
               onOpenProfile={goToProfile}
+              onOpenUserManagement={goToUserManagement}
               onLogout={handleLogout}
               onToggleSearch={handleToggleSearch}
+              isAdmin={isAdmin}
+              isOffline={isOffline}
             />
           )}
           {isSearchVisible && currentScreen !== 'login-settings' && (
@@ -240,24 +276,41 @@ export default function App() {
 function AppHeader({
   onOpenSettings,
   onOpenProfile,
+  onOpenUserManagement,
   onLogout,
   onToggleSearch,
+  isAdmin,
+  isOffline,
 }: {
   onOpenSettings: () => void;
   onOpenProfile: () => void;
+  onOpenUserManagement: () => void;
   onLogout: () => void;
   onToggleSearch: () => void;
+  isAdmin: boolean;
+  isOffline: boolean;
 }) {
   const { t, locale, setLocale } = useTranslation();
   const localeLabel = locale === 'zh' ? '中' : locale === 'zh-Hant' ? '繁' : 'EN';
 
   return (
     <View style={styles.header}>
-      <View style={styles.headerTitleBlock}>
-        <Text style={styles.appName}>AIStock</Text>
-        <Text style={styles.subtleText}>{t.home.subtitle}</Text>
+      <View style={styles.headerIconBlock}>
+        <View style={styles.appIcon}>
+          <TrendingUp size={24} color="#FFFFFF" />
+        </View>
       </View>
       <View style={styles.headerActions}>
+        <View style={styles.connectionStatus}>
+          {isOffline ? (
+            <WifiOff size={18} color="#DC2626" />
+          ) : (
+            <Wifi size={18} color="#10B981" />
+          )}
+          <Text style={[styles.connectionStatusText, isOffline ? styles.connectionStatusOffline : styles.connectionStatusOnline]}>
+            {isOffline ? t.common.offline : t.common.online}
+          </Text>
+        </View>
         <Pressable onPress={onToggleSearch}>
           <Search size={20} color="#162033" />
         </Pressable>
@@ -270,6 +323,11 @@ function AppHeader({
         <Pressable onPress={onOpenProfile}>
           <User size={20} color="#162033" />
         </Pressable>
+        {isAdmin ? (
+          <Pressable onPress={onOpenUserManagement}>
+            <ShieldCheck size={20} color="#162033" />
+          </Pressable>
+        ) : null}
         <Pressable onPress={onLogout}>
           <LogOut size={20} color="#162033" />
         </Pressable>
@@ -358,24 +416,42 @@ const styles = StyleSheet.create({
     gap: 12,
     justifyContent: 'space-between',
   },
-  headerTitleBlock: {
+  headerIconBlock: {
     flex: 1,
     minWidth: 0,
   },
-  appName: {
-    color: '#162033',
-    fontSize: 26,
-    fontWeight: '800',
-  },
-  subtleText: {
-    color: '#6B7280',
-    fontSize: 13,
+  appIcon: {
+    alignItems: 'center',
+    backgroundColor: '#0F8B8D',
+    borderRadius: 12,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
   },
   headerActions: {
     alignItems: 'center',
     flexDirection: 'row',
     flexShrink: 0,
-    gap: 12,
+    gap: 8,
+  },
+  connectionStatus: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
+  },
+  connectionStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  connectionStatusOnline: {
+    color: '#10B981',
+  },
+  connectionStatusOffline: {
+    color: '#DC2626',
   },
   langButton: {
     alignItems: 'center',

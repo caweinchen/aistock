@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   AUTH_TOKEN: 'auth_token',
   USER_ID: 'user_id',
   USERNAME: 'username',
+  USER_ROLE: 'user_role',
   PASSWORD_HASH: 'password_hash',
   OFFLINE_TOKEN: 'offline_token',
   WATCHLIST: 'watchlist',
@@ -42,6 +43,7 @@ let CACHE_SERVER_CONFIG: ServerConfig = DEFAULT_CONFIG;
 let CACHE_AUTH_TOKEN: string | null = null;
 let CACHE_USER_ID: string | null = null;
 let CACHE_USERNAME: string | null = null;
+let CACHE_USER_ROLE: string | null = null;
 let CACHE_PASSWORD_HASH: string | null = null;
 let CACHE_OFFLINE_TOKEN: string | null = null;
 
@@ -128,6 +130,34 @@ export const storage = {
       // Silent fail
     }
   },
+
+  async getAllKeys(): Promise<string[]> {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return Object.keys(window.localStorage);
+      }
+      if (AsyncStorage) {
+        return await AsyncStorage.getAllKeys();
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  },
+
+  async clear(): Promise<void> {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.clear();
+        return;
+      }
+      if (AsyncStorage) {
+        await AsyncStorage.clear();
+      }
+    } catch {
+      // Silent fail
+    }
+  },
 };
 
 export { STORAGE_KEYS, storage as defaultStorage };
@@ -150,6 +180,7 @@ export async function initStorage(): Promise<void> {
         STORAGE_KEYS.AUTH_TOKEN,
         STORAGE_KEYS.USER_ID,
         STORAGE_KEYS.USERNAME,
+        STORAGE_KEYS.USER_ROLE,
         STORAGE_KEYS.PASSWORD_HASH,
         STORAGE_KEYS.OFFLINE_TOKEN,
       ];
@@ -168,6 +199,7 @@ export async function initStorage(): Promise<void> {
       CACHE_AUTH_TOKEN = map[STORAGE_KEYS.AUTH_TOKEN] ?? null;
       CACHE_USER_ID = map[STORAGE_KEYS.USER_ID] ?? null;
       CACHE_USERNAME = map[STORAGE_KEYS.USERNAME] ?? null;
+      CACHE_USER_ROLE = map[STORAGE_KEYS.USER_ROLE] ?? null;
       CACHE_PASSWORD_HASH = map[STORAGE_KEYS.PASSWORD_HASH] ?? null;
       CACHE_OFFLINE_TOKEN = map[STORAGE_KEYS.OFFLINE_TOKEN] ?? null;
     } catch {
@@ -240,10 +272,19 @@ export function clearAuthToken(): void {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
       window.localStorage.removeItem(STORAGE_KEYS.USER_ID);
+      window.localStorage.removeItem(STORAGE_KEYS.USER_ROLE);
+      window.localStorage.removeItem(STORAGE_KEYS.OFFLINE_TOKEN);
     } else if (AsyncStorage) {
-      AsyncStorage.multiRemove([STORAGE_KEYS.AUTH_TOKEN, STORAGE_KEYS.USER_ID]).catch(() => {});
+      AsyncStorage.multiRemove([
+        STORAGE_KEYS.AUTH_TOKEN,
+        STORAGE_KEYS.USER_ID,
+        STORAGE_KEYS.USER_ROLE,
+        STORAGE_KEYS.OFFLINE_TOKEN,
+      ]).catch(() => {});
       CACHE_AUTH_TOKEN = null;
       CACHE_USER_ID = null;
+      CACHE_USER_ROLE = null;
+      CACHE_OFFLINE_TOKEN = null;
     }
   } catch {
     // Silent fail for storage errors
@@ -411,5 +452,29 @@ export function clearOfflineLogin(): void {
     }
   } catch {
     // Silent fail
+  }
+}
+
+export function getStoredUserRole(): string | null {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem(STORAGE_KEYS.USER_ROLE);
+    }
+    return CACHE_USER_ROLE;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUserRole(role: string): void {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(STORAGE_KEYS.USER_ROLE, role);
+    } else if (AsyncStorage) {
+      AsyncStorage.setItem(STORAGE_KEYS.USER_ROLE, role).catch(() => {});
+      CACHE_USER_ROLE = role;
+    }
+  } catch {
+    // Silent fail for storage errors
   }
 }

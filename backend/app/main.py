@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import Literal
 import logging
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,12 +21,13 @@ if not logger.handlers:
 
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.database import init_db, get_db, init_sample_data, AuthSession, User, WatchlistItem, Stock, FactorScoreDB, StrategyResultDB, PricePointDB, AlertItemDB
+from app.database import init_db, get_db, init_sample_data, AuthSession, User, WatchlistItem, Stock, FactorScoreDB, StrategyResultDB, PricePointDB, AlertItemDB, DividendDB, StockNewsDB, InstHoldDB
 from app.security import generate_auth_token, hash_password, hash_token, is_password_hash, verify_password, validate_password_strength
 from app.tushare_service import init_tushare, get_tushare_service
 from app.eastmoney_service import init_eastmoney, get_eastmoney_service
@@ -64,7 +66,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     user = db.query(User).filter(User.id == session.user_id).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is inactive")
     
+    return user
+
+
+def get_admin_user(user: User = Depends(get_current_user)) -> User:
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
     return user
 
 
@@ -125,9 +135,31 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    is_active: bool
+    role: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class UpdateUserRequest(BaseModel):
+    is_active: bool | None = None
+    role: str | None = None
+
+
 class LoginResponse(BaseModel):
     token: str
     username: str
+    user_id: int
+    role: str
+    is_active: bool
 
 
 class ChangePasswordRequest(BaseModel):
@@ -150,6 +182,9 @@ class AlertItem(BaseModel):
 
 class PricePoint(BaseModel):
     date: str
+    open: float
+    high: float
+    low: float
     close: float
     volume: int
 
@@ -215,6 +250,23 @@ def stock_to_summary(stock: Stock) -> StockSummary:
     )
 
 
+def update_stock_realtime_quote(db: Session, stock: Stock) -> None:
+    try:
+        quotes = get_eastmoney_service().get_realtime_quote([stock.code])
+        if not quotes:
+            return
+        quote = quotes[0]
+        stock.price = quote.get("price", stock.price or 0)
+        stock.change_percent = quote.get("change_percent", stock.change_percent or 0)
+        stock.name = quote.get("name", stock.name)
+        stock.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(stock)
+    except Exception as e:
+        logger.error(f"Failed to update realtime quote for stock {stock.code}: {e}")
+        db.rollback()
+
+
 def db_factor_to_model(factor: FactorScoreDB) -> FactorScore:
     return FactorScore(
         key=factor.key,
@@ -273,6 +325,9 @@ def engine_result_to_detail(result: BacktestResult) -> StrategyDetail:
 def db_price_to_model(price: PricePointDB) -> PricePoint:
     return PricePoint(
         date=price.date,
+        open=price.open,
+        high=price.high,
+        low=price.low,
         close=price.close,
         volume=price.volume,
     )
@@ -332,52 +387,167 @@ def _stock_ts_code(stock: Stock) -> str:
     return f"{stock.code}{suffix}"
 
 
-def _history_needs_refresh(history: list[PricePointDB]) -> bool:
+def get_initialized_tushare_service():
+    service = get_tushare_service()
+    if tushare_config.token and not getattr(service, "pro", None):
+        service = init_tushare(tushare_config.token)
+    return service
+
+
+def _is_trading_time() -> bool:
+    now = datetime.now(MARKET_TIMEZONE).replace(tzinfo=None)
+    weekday = now.weekday()
+    
+    if weekday >= 5:
+        return False
+    
+    hour = now.hour
+    minute = now.minute
+    
+    if (hour == 9 and minute >= 30) or (hour == 10) or (hour == 11 and minute < 30):
+        return True
+    if hour == 13 or hour == 14:
+        return True
+    
+    return False
+
+def _is_morning_break_time() -> bool:
+    now = datetime.now(MARKET_TIMEZONE).replace(tzinfo=None)
+    weekday = now.weekday()
+    if weekday >= 5:
+        return False
+    
+    hour = now.hour
+    minute = now.minute
+    
+    if hour == 11 and minute >= 30:
+        return True
+    if hour == 12:
+        return True
+    
+    return False
+
+def _previous_weekday(value: datetime) -> datetime:
+    previous = value - timedelta(days=1)
+    while previous.weekday() >= 5:
+        previous -= timedelta(days=1)
+    return previous
+
+def _last_market_session_end_time() -> datetime:
+    now = datetime.now(MARKET_TIMEZONE).replace(tzinfo=None)
+    today = now.date()
+    hour = now.hour
+    minute = now.minute
+    weekday = now.weekday()
+    
+    is_today_trading_day = weekday < 5
+    
+    if is_today_trading_day:
+        if (hour > 15) or (hour == 15):
+            return datetime.combine(today, datetime.min.time()).replace(hour=15)
+        if _is_morning_break_time():
+            return datetime.combine(today, datetime.min.time()).replace(hour=11, minute=30)
+        if hour < 9 or (hour == 9 and minute < 30):
+            prev = _previous_weekday(now)
+            return datetime.combine(prev.date(), datetime.min.time()).replace(hour=15)
+    
+    prev = _previous_weekday(now)
+    return datetime.combine(prev.date(), datetime.min.time()).replace(hour=15)
+
+def _history_needs_refresh(history: list[PricePointDB], stock: Stock) -> bool:
     if not history:
         return True
+    
     latest = max(history, key=lambda price: price.date)
     try:
         latest_date = datetime.strptime(latest.date, "%Y-%m-%d").date()
     except ValueError:
         return True
-    return (datetime.now().date() - latest_date).days > 1
+    
+    if stock.updated_at is None:
+        return True
+    
+    last_update = stock.updated_at
+    if last_update.tzinfo is None:
+        last_update = last_update.replace(tzinfo=timezone.utc)
+    last_update = last_update.astimezone(MARKET_TIMEZONE).replace(tzinfo=None)
+    
+    now = datetime.now(MARKET_TIMEZONE).replace(tzinfo=None)
+    
+    if _is_trading_time():
+        minutes_since_update = (now - last_update).total_seconds() / 60
+        return minutes_since_update > 5
+    
+    last_session_end = _last_market_session_end_time()
+    return last_update < last_session_end
 
 
 def ensure_price_history(db: Session, stock: Stock) -> list[PricePointDB]:
     history = get_price_history(db, stock.code)
-    if not _history_needs_refresh(history) or not tushare_config.enabled:
+    if not _history_needs_refresh(history, stock):
         return history
 
     try:
         end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=720)).strftime("%Y%m%d")
-        daily_data = get_tushare_service().get_daily_price(_stock_ts_code(stock), start_date, end_date)
+        
+        if history:
+            latest_date = max(h.date for h in history)
+            start_date = latest_date.replace("-", "")
+            logger.info(f"Incremental update for stock {stock.code}, starting from {latest_date}")
+        else:
+            start_date = (datetime.now() - timedelta(days=720)).strftime("%Y%m%d")
+
+        daily_data = get_initialized_tushare_service().get_daily_price(_stock_ts_code(stock), start_date, end_date)
         if not daily_data:
+            stock.data_status = "partial" if not history else stock.data_status
+            db.commit()
             return history
 
-        db.query(PricePointDB).filter(PricePointDB.stock_code == stock.code).delete()
+        updated_count = 0
+        inserted_count = 0
         for item in daily_data:
             date = _format_tushare_date(_item_value(item, "date") or _item_value(item, "trade_date"))
             close = float(_item_value(item, "close", 0) or 0)
             if not date or close <= 0:
                 continue
-            db.add(
-                PricePointDB(
-                    stock_code=stock.code,
-                    date=date,
-                    open=float(_item_value(item, "open", close) or close),
-                    high=float(_item_value(item, "high", close) or close),
-                    low=float(_item_value(item, "low", close) or close),
-                    close=close,
-                    volume=int(_item_value(item, "volume", _item_value(item, "vol", 0)) or 0),
+
+            existing = db.query(PricePointDB).filter(
+                PricePointDB.stock_code == stock.code,
+                PricePointDB.date == date
+            ).first()
+
+            if existing:
+                existing.open = float(_item_value(item, "open", close) or close)
+                existing.high = float(_item_value(item, "high", close) or close)
+                existing.low = float(_item_value(item, "low", close) or close)
+                existing.close = close
+                existing.volume = int(_item_value(item, "volume", _item_value(item, "vol", 0)) or 0)
+                updated_count += 1
+            else:
+                db.add(
+                    PricePointDB(
+                        stock_code=stock.code,
+                        date=date,
+                        open=float(_item_value(item, "open", close) or close),
+                        high=float(_item_value(item, "high", close) or close),
+                        low=float(_item_value(item, "low", close) or close),
+                        close=close,
+                        volume=int(_item_value(item, "volume", _item_value(item, "vol", 0)) or 0),
+                    )
                 )
-            )
+                inserted_count += 1
+
+        stock.data_status = "normal"
+        stock.updated_at = datetime.now(timezone.utc)
         db.commit()
-    except Exception:
+        logger.info(f"Updated price history for stock {stock.code}: {inserted_count} inserted, {updated_count} updated")
+    except Exception as e:
+        logger.error(f"Failed to ensure price history for stock {stock.code}: {e}")
         db.rollback()
         return history
 
-    return sorted(get_price_history(db, stock.code), key=lambda price: price.date)
+    refreshed_history = sorted(get_price_history(db, stock.code), key=lambda price: price.date)
+    return refreshed_history
 
 
 def parse_custom_strategy_id(strategy_id: str) -> tuple[str, int] | None:
@@ -406,29 +576,14 @@ def get_stock_detail(db: Session, code: str, update_realtime: bool = True) -> St
     need_update_realtime = update_realtime
     if stock.updated_at and update_realtime:
         last_update_date = stock.updated_at.date() if hasattr(stock.updated_at, 'date') else stock.updated_at
-        # 閸欘亝婀侀崷銊︽暪閻╂ê鎮楅敍?5:00娑斿鎮楅敍澶夌瑬娴犲﹤銇夊鍙夋纯閺傛媽绻冮敍灞惧鐠哄疇绻?
         if last_update_date == today and current_hour >= market_close_hour:
             need_update_realtime = False
-            logger.info(f"瀹稿弶鏁归惄妯圭瑬鐎圭偞妞傜悰灞惧剰瀹稿弶妲告禒濠冩）閺佺増宓侀敍宀冪儲鏉╁洦娲块弬? {code}")
+            logger.info(f"Stock {code} already refreshed after market close today")
         elif last_update_date == today and current_hour < market_close_hour:
-            logger.info(f"娴溿倖妲楅弮鍫曟？閸愬拑绱濋棁鈧憰浣规纯閺傛澘鐤勯弮鎯邦攽閹? {code}")
+            logger.info(f"Stock {code} was refreshed today before market close; realtime update allowed")
 
     if need_update_realtime:
-        try:
-            eastmoney = get_eastmoney_service()
-            quotes = eastmoney.get_realtime_quote([code])
-            if quotes:
-                quote = quotes[0]
-                stock.price = quote.get('price', stock.price or 0)
-                stock.change_percent = quote.get('change_percent', stock.change_percent or 0)
-                stock.updated_at = datetime.now(timezone.utc)
-                db.commit()
-                logger.info(f"閺囧瓨鏌婄€圭偞妞傜悰灞惧剰: {code} - {stock.name}")
-        except Exception as e:
-            logger.error(f"閺囧瓨鏌婄€圭偞妞傜悰灞惧剰婢惰精瑙?{code}: {e}")
-            db.rollback()
-
-    # 获取历史价格数据
+        update_stock_realtime_quote(db, stock)
     history = ensure_price_history(db, stock)
     
     # 从TuShare获取财务数据并计算因子评分
@@ -455,6 +610,50 @@ def get_stock_detail(db: Session, code: str, update_realtime: bool = True) -> St
         data_status=stock.data_status,
         updated_at=stock.updated_at,
     )
+
+
+def ensure_stock_related_data(db: Session, stock: Stock) -> None:
+    try:
+        history = ensure_price_history(db, stock)
+        if not history:
+            logger.warning(f"No price history for stock {stock.code}, skipping related data calculation")
+            return
+        
+        factors = ensure_factor_scores(db, stock, history)
+        alerts = ensure_alerts(db, stock, history, factors)
+        ensure_ai_summary(db, stock, history, factors, alerts)
+        
+        strategies = calculate_strategies(history)
+        for strategy in strategies:
+            existing = db.query(StrategyResultDB).filter(
+                StrategyResultDB.stock_code == stock.code,
+                StrategyResultDB.id == strategy["id"],
+            ).first()
+            if existing:
+                existing.name = strategy["name"]
+                existing.period = strategy["period"]
+                existing.return_rate = strategy["return_rate"]
+                existing.max_drawdown = strategy["max_drawdown"]
+                existing.win_rate = strategy["win_rate"]
+                existing.risk = strategy["risk"]
+                existing.summary = strategy["summary"]
+            else:
+                db.add(StrategyResultDB(
+                    id=strategy["id"],
+                    stock_code=stock.code,
+                    name=strategy["name"],
+                    period=strategy["period"],
+                    return_rate=strategy["return_rate"],
+                    max_drawdown=strategy["max_drawdown"],
+                    win_rate=strategy["win_rate"],
+                    risk=strategy["risk"],
+                    summary=strategy["summary"],
+                ))
+        db.commit()
+        logger.info(f"Updated strategy results for stock {stock.code}")
+    except Exception as e:
+        logger.error(f"Failed to ensure related data for stock {stock.code}: {e}")
+        db.rollback()
 
 
 def get_watchlist_user(db: Session, username: str = "admin") -> User:
@@ -511,11 +710,10 @@ def get_stocks(db: Session = Depends(get_db), user: User = Depends(get_current_u
 
 @app.get("/api/stocks/refresh-all", response_model=list[StockSummary])
 def refresh_all_stocks(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """批量刷新当前用户所有自选股的实时数据并保存到数据库"""
+    """批量刷新当前用户所有自选股的实时数据和历史行情并保存到数据库"""
     logger.info(f"Starting batch refresh for user [{user.username}]")
     
     try:
-        # 获取用户的自选股代码
         watchlist_items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).all()
         codes = [item.stock_code for item in watchlist_items]
         
@@ -547,7 +745,11 @@ def refresh_all_stocks(db: Session = Depends(get_db), user: User = Depends(get_c
         else:
             logger.warning("No quotes received from EastMoney")
 
-        # 返回用户自选股列表
+        for code in codes:
+            stock = db.query(Stock).filter(Stock.code == code).first()
+            if stock:
+                ensure_stock_related_data(db, stock)
+
         updated_stocks = db.query(Stock).filter(Stock.code.in_(codes)).all()
         return [stock_to_summary(s) for s in updated_stocks]
         
@@ -559,15 +761,12 @@ def refresh_all_stocks(db: Session = Depends(get_db), user: User = Depends(get_c
 
 @app.get("/api/stocks/search", response_model=list[StockSummary])
 def search_stocks(q: str = "", db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """搜索股票（公共数据，所有用户共用）"""
     keyword = q.strip()
     if not keyword:
-        # 无搜索关键词时返回用户自选股
         return get_stocks(db, user)
 
-    logger.info(f"閹兼粎鍌ㄩ懖锛勩偍: {keyword}")
+    logger.info(f"Searching stocks with keyword: {keyword}")
 
-    # 1. 娴兼ê鍘涙禒搴㈡殶閹诡喖绨遍幖婊呭偍閿涘牊鏁幐浣疯厬閼昏鲸鏋冮崥宥囆為敍?
     try:
         stocks = db.query(Stock).filter(
             (Stock.code.ilike(f"%{keyword}%")) |
@@ -579,9 +778,8 @@ def search_stocks(q: str = "", db: Session = Depends(get_db), user: User = Depen
             logger.info(f"Database search returned {len(stocks)} results for {keyword}")
             return [stock_to_summary(s) for s in stocks]
     except Exception as e:
-        logger.error(f"閺佺増宓佹惔鎾存偝缁便垹銇戠拹?'{keyword}': {e}")
+        logger.error(f"Database search failed for keyword '{keyword}': {e}")
 
-    # 2. 閺佺増宓佹惔鎾寸梾閺堝绱濇禒搴濈閺傜鍌ㄧ€靛本鎮崇槐銏犵杽閺冭埖鏆熼幑?
     eastmoney = get_eastmoney_service()
     search_results = eastmoney.search_stocks(keyword)
 
@@ -593,7 +791,6 @@ def search_stocks(q: str = "", db: Session = Depends(get_db), user: User = Depen
             ts_code = r.get('ts_code', '')
             market = r.get('market', '')
 
-            # 閼奉亜濮╂穱婵嗙摠閸掔増鏆熼幑顔肩氨
             try:
                 existing = db.query(Stock).filter(Stock.code == code).first()
                 if not existing:
@@ -605,12 +802,11 @@ def search_stocks(q: str = "", db: Session = Depends(get_db), user: User = Depen
                     )
                     db.add(stock)
                     db.commit()
-                    logger.info(f"閼奉亜濮╂穱婵嗙摠閼诧紕銈ㄩ崚鐗堟殶閹诡喖绨? {code} - {name}")
+                    logger.info(f"Created stock from search result: {code} - {name}")
             except Exception as e:
-                logger.error(f"娣囨繂鐡ㄩ懖锛勩偍婢惰精瑙?{code}: {e}")
+                logger.error(f"Failed to save search result stock {code}: {e}")
                 db.rollback()
 
-            # 閼惧嘲褰囩€圭偞妞傜悰灞惧剰
             try:
                 quotes = eastmoney.get_realtime_quote([code])
                 if quotes:
@@ -620,7 +816,7 @@ def search_stocks(q: str = "", db: Session = Depends(get_db), user: User = Depen
                         name=name,
                         price=quote.get('price', 0),
                         change_percent=quote.get('change_percent', 0),
-                        score=50,  # 姒涙顓荤拠鍕瀻
+                        score=50,
                         signal="neutral"
                     ))
                 else:
@@ -633,7 +829,7 @@ def search_stocks(q: str = "", db: Session = Depends(get_db), user: User = Depen
                         signal="neutral"
                     ))
             except Exception as e:
-                logger.error(f"閼惧嘲褰囩€圭偞妞傜悰灞惧剰婢惰精瑙?{code}: {e}")
+                logger.error(f"Failed to fetch realtime quote for search result {code}: {e}")
                 summaries.append(StockSummary(
                     code=code,
                     name=name,
@@ -646,19 +842,16 @@ def search_stocks(q: str = "", db: Session = Depends(get_db), user: User = Depen
         logger.info(f"EastMoney search returned {len(summaries)} results for {keyword}")
         return summaries
 
-    logger.warning(f"閹兼粎鍌ㄩ弮鐘电波閺? {keyword}")
+    logger.warning(f"No stock search results for keyword: {keyword}")
     return []
-
 
 @app.get("/api/stocks/{code}", response_model=StockDetail)
 def get_stock_detail_api(code: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    logger.info(f"閼惧嘲褰囬懖锛勩偍鐠囷附鍎? {code}")
+    logger.info(f"Loading stock detail: {code}")
 
-    # 濡偓閺屻儲鏆熼幑顔肩氨娑擃厽妲搁崥锕€鐡ㄩ崷?
     stock = db.query(Stock).filter(Stock.code == code).first()
     if not stock:
-        logger.info(f"閼诧紕銈ㄦ稉宥呮躬閺佺増宓佹惔鎾茶厬閿涘苯鐨剧拠鏇氱矤娑撴粍鏌熺拹銏犵槣閼惧嘲褰? {code}")
-        # 娴犲簼绗㈤弬纭呭偍鐎靛矁骞忛崣鏍ц嫙娣囨繂鐡ㄩ崚鐗堟殶閹诡喖绨?
+        logger.info(f"Stock {code} not found locally; fetching stock info")
         try:
             from app.eastmoney_service import get_stock_info_by_code
             stock_info = get_stock_info_by_code(code)
@@ -672,18 +865,17 @@ def get_stock_detail_api(code: str, db: Session = Depends(get_db), user: User = 
                 db.add(stock)
                 db.commit()
                 db.refresh(stock)
-                logger.info(f"娴犲簼绗㈤弬纭呭偍鐎靛矁骞忛崣鏍ц嫙娣囨繂鐡ㄩ懖锛勩偍: {code} - {stock.name}")
+                logger.info(f"Created stock while loading detail: {code} - {stock.name}")
             else:
-                logger.error(f"閺冪姵纭堕懢宄板絿閼诧紕銈ㄦ穱鈩冧紖: {code}")
+                logger.error(f"Stock info not found for code: {code}")
                 raise HTTPException(status_code=404, detail="Stock not found")
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"閼惧嘲褰囬懖锛勩偍鐠囷附鍎忔径杈Е {code}: {e}")
+            logger.error(f"Failed to load stock detail for {code}: {e}")
             raise HTTPException(status_code=500, detail="Failed to get stock detail")
 
     return get_stock_detail(db, code)
-
 
 @app.get("/api/stocks/{code}/strategies", response_model=list[StrategyResult])
 def get_stock_strategies(code: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -725,13 +917,55 @@ def get_stock_dividend(code: str, db: Session = Depends(get_db), user: User = De
     """获取股票分红记录"""
     if not tushare_config.enabled:
         raise HTTPException(status_code=503, detail="TuShare is not enabled")
-
     tushare_svc = get_tushare_service()
     stock = db.query(Stock).filter(Stock.code == code).first()
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
-    dividend = tushare_svc.get_dividend(stock.ts_code)
+    # Allow client to force a fresh fetch with ?force=true
+    from fastapi import Query
+    force: bool = Query(False)
+
+    if not force:
+        cached = db.query(DividendDB).filter(DividendDB.stock_code == code).order_by(DividendDB.ann_date.desc()).all()
+        if cached and len(cached) > 0:
+            results = []
+            for c in cached:
+                results.append({
+                    'ts_code': code,
+                    'div_proc': '',
+                    'ann_date': c.ann_date,
+                    'record_date': c.record_date,
+                    'ex_date': c.ex_date,
+                    'pay_date': c.pay_date,
+                    'div_cash': c.div_cash,
+                    'bonus_share': c.bonus_share,
+                    'transfer_share': c.transfer_share,
+                })
+            return results
+
+    dividend = tushare_svc.get_dividend(_stock_ts_code(stock))
+    # If TuShare reported a last_error on the service, surface it as diagnostic 502
+    if getattr(tushare_svc, 'last_error', None) and isinstance(getattr(tushare_svc, 'last_error'), dict):
+        raise HTTPException(status_code=502, detail=tushare_svc.last_error)
+    if dividend:
+        try:
+            db.query(DividendDB).filter(DividendDB.stock_code == code).delete()
+            for item in dividend:
+                db.add(DividendDB(
+                    stock_code=code,
+                    ann_date=item.get('ann_date', '') or '',
+                    record_date=item.get('record_date', '') or '',
+                    ex_date=item.get('ex_date', '') or '',
+                    pay_date=item.get('pay_date', '') or '',
+                    div_cash=float(item.get('div_cash', 0) or 0),
+                    bonus_share=float(item.get('bonus_share', 0) or 0),
+                    transfer_share=float(item.get('transfer_share', 0) or 0),
+                ))
+            db.commit()
+        except Exception:
+            db.rollback()
+
     return dividend
 
 
@@ -740,13 +974,46 @@ def get_stock_news(code: str, db: Session = Depends(get_db), user: User = Depend
     """获取股票重大事件/新闻"""
     if not tushare_config.enabled:
         raise HTTPException(status_code=503, detail="TuShare is not enabled")
-
     tushare_svc = get_tushare_service()
     stock = db.query(Stock).filter(Stock.code == code).first()
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
-    news = tushare_svc.get_stock_news(stock.ts_code)
+    from fastapi import Query
+    force: bool = Query(False)
+
+    if not force:
+        cached = db.query(StockNewsDB).filter(StockNewsDB.stock_code == code).order_by(StockNewsDB.pub_time.desc()).all()
+        if cached and len(cached) > 0:
+            results = []
+            for c in cached:
+                results.append({
+                    'ts_code': code,
+                    'title': c.title,
+                    'content': c.content,
+                    'pub_time': c.pub_time,
+                    'src': c.source,
+                })
+            return results
+
+    news = tushare_svc.get_stock_news(_stock_ts_code(stock))
+    if getattr(tushare_svc, 'last_error', None) and isinstance(getattr(tushare_svc, 'last_error'), dict):
+        raise HTTPException(status_code=502, detail=tushare_svc.last_error)
+    if news:
+        try:
+            db.query(StockNewsDB).filter(StockNewsDB.stock_code == code).delete()
+            for item in news:
+                db.add(StockNewsDB(
+                    stock_code=code,
+                    title=item.get('title', '') or '',
+                    content=item.get('content', '') or '',
+                    pub_time=str(item.get('pub_time', '') or ''),
+                    source=item.get('src', '') or '',
+                ))
+            db.commit()
+        except Exception:
+            db.rollback()
+
     return news
 
 
@@ -761,7 +1028,9 @@ def get_stock_adj_factor(code: str, db: Session = Depends(get_db), user: User = 
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
-    adj_factor = tushare_svc.get_adj_factor(stock.ts_code)
+    adj_factor = tushare_svc.get_adj_factor(_stock_ts_code(stock))
+    if getattr(tushare_svc, 'last_error', None) and isinstance(getattr(tushare_svc, 'last_error'), dict):
+        raise HTTPException(status_code=502, detail=tushare_svc.last_error)
     return adj_factor
 
 
@@ -770,13 +1039,50 @@ def get_stock_inst_hold(code: str, db: Session = Depends(get_db), user: User = D
     """获取机构持仓数据（按时间倒序）"""
     if not tushare_config.enabled:
         raise HTTPException(status_code=503, detail="TuShare is not enabled")
-
     tushare_svc = get_tushare_service()
     stock = db.query(Stock).filter(Stock.code == code).first()
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
-    inst_hold = tushare_svc.get_inst_hold(stock.ts_code)
+    from fastapi import Query
+    force: bool = Query(False)
+
+    if not force:
+        cached = db.query(InstHoldDB).filter(InstHoldDB.stock_code == code).order_by(InstHoldDB.trade_date.desc()).all()
+        if cached and len(cached) > 0:
+            results = []
+            for c in cached:
+                results.append({
+                    'ts_code': code,
+                    'trade_date': c.trade_date,
+                    'inst_type': c.inst_type,
+                    'hold_amount': c.hold_amount,
+                    'hold_ratio': c.hold_ratio,
+                    'change_amount': c.change_amount,
+                    'change_ratio': c.change_ratio,
+                })
+            return results
+
+    inst_hold = tushare_svc.get_inst_hold(_stock_ts_code(stock))
+    if getattr(tushare_svc, 'last_error', None) and isinstance(getattr(tushare_svc, 'last_error'), dict):
+        raise HTTPException(status_code=502, detail=tushare_svc.last_error)
+    if inst_hold:
+        try:
+            db.query(InstHoldDB).filter(InstHoldDB.stock_code == code).delete()
+            for item in inst_hold:
+                db.add(InstHoldDB(
+                    stock_code=code,
+                    trade_date=item.get('trade_date', '') or '',
+                    inst_type=item.get('inst_type', '') or '',
+                    hold_amount=float(item.get('hold_amount', 0) or 0),
+                    hold_ratio=float(item.get('hold_ratio', 0) or 0),
+                    change_amount=float(item.get('change_amount', 0) or 0),
+                    change_ratio=float(item.get('change_ratio', 0) or 0),
+                ))
+            db.commit()
+        except Exception:
+            db.rollback()
+
     return inst_hold
 
 
@@ -812,9 +1118,11 @@ def refresh_stock_data(code: str, db: Session = Depends(get_db), user: User = De
 @app.get("/api/tushare/status")
 def get_tushare_status():
     """Return TuShare connection status."""
+    service = get_initialized_tushare_service() if tushare_config.token else get_tushare_service()
     return {
         "enabled": tushare_config.enabled,
         "has_token": bool(tushare_config.token),
+        "pro_initialized": bool(getattr(service, "pro", None)),
         "status": "connected" if tushare_config.enabled else "disabled"
     }
 
@@ -966,19 +1274,17 @@ def get_watchlist(db: Session = Depends(get_db), user: User = Depends(get_curren
         logger.info(f"Loaded watchlist [{user.username}]: {len(items)} items")
         return {"codes": [item.stock_code for item in items]}
     except Exception as e:
-        logger.error(f"閼惧嘲褰囬懛顏堚偓澶庡亗閸掓銆冩径杈Е [{user.username}]: {e}")
-        raise HTTPException(status_code=500, detail="閼惧嘲褰囬懛顏堚偓澶庡亗閸掓銆冩径杈Е")
+        logger.error(f"Failed to load watchlist for user [{user.username}]: {e}")
+        raise HTTPException(status_code=500, detail="Failed to load watchlist")
 
 
 @app.post("/api/watchlist/{code}")
 def add_to_watchlist(code: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    logger.info(f"濞ｈ濮為懛顏堚偓澶庡亗 [{user.username}]: {code}")
+    logger.info(f"Adding stock to watchlist for user [{user.username}]: {code}")
 
-    # 濡偓閺屻儴鍋傜粊銊︽Ц閸氾箑婀弫鐗堝祦鎼存挷鑵戦敍灞肩瑝閸︺劌鍨懛顏勫З娣囨繂鐡?
     try:
         stock = db.query(Stock).filter(Stock.code == code).first()
         if not stock:
-            # 娴犲孩鏆熼幑顔界爱閼惧嘲褰囬懖锛勩偍娣団剝浼呴獮鏈电箽鐎涙ê鍩岄弫鐗堝祦鎼?
             from app.eastmoney_service import get_stock_info_by_code
             stock_info = get_stock_info_by_code(code)
             if stock_info:
@@ -991,10 +1297,13 @@ def add_to_watchlist(code: str, db: Session = Depends(get_db), user: User = Depe
                 db.add(stock)
                 db.commit()
                 db.refresh(stock)
-                logger.info(f"閼奉亜濮╂穱婵嗙摠閼诧紕銈ㄦ穱鈩冧紖: {code} - {stock.name}")
+                logger.info(f"Created stock while adding to watchlist: {code} - {stock.name}")
             else:
-                logger.error(f"閼惧嘲褰囬懖锛勩偍娣団剝浼呮径杈Е: {code}")
+                logger.error(f"Stock info not found while adding to watchlist: {code}")
                 raise HTTPException(status_code=404, detail="Stock not found")
+
+        if stock.price <= 0:
+            update_stock_realtime_quote(db, stock)
 
         existing_item = db.query(WatchlistItem).filter(
             WatchlistItem.user_id == user.id,
@@ -1003,7 +1312,7 @@ def add_to_watchlist(code: str, db: Session = Depends(get_db), user: User = Depe
         if not existing_item:
             db.add(WatchlistItem(user_id=user.id, stock_code=code))
             db.commit()
-            logger.info(f"濞ｈ濮為懛顏堚偓澶庡亗閹存劕濮?[{user.username}]: {code}")
+            logger.info(f"Added stock to watchlist for user [{user.username}]: {code}")
 
         codes = [item.stock_code for item in db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).all()]
         stocks = db.query(Stock).filter(Stock.code.in_(codes)).all() if codes else []
@@ -1011,18 +1320,18 @@ def add_to_watchlist(code: str, db: Session = Depends(get_db), user: User = Depe
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"濞ｈ濮為懛顏堚偓澶庡亗婢惰精瑙?[{user.username}] {code}: {e}")
+        logger.error(f"Failed to add stock to watchlist for user [{user.username}] {code}: {e}")
         raise HTTPException(status_code=500, detail="Failed to add to watchlist")
 
 
 @app.delete("/api/watchlist/{code}")
 def remove_from_watchlist(code: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    logger.info(f"閸掔娀娅庨懛顏堚偓澶庡亗 [{user.username}]: {code}")
+    logger.info(f"Removing stock from watchlist for user [{user.username}]: {code}")
 
     try:
         stock = db.query(Stock).filter(Stock.code == code).first()
         if not stock:
-            logger.error(f"閼诧紕銈ㄦ稉宥呯摠閸? {code}")
+            logger.error(f"Stock not found while removing from watchlist: {code}")
             raise HTTPException(status_code=404, detail="Stock not found")
 
         item = db.query(WatchlistItem).filter(
@@ -1032,7 +1341,7 @@ def remove_from_watchlist(code: str, db: Session = Depends(get_db), user: User =
         if item:
             db.delete(item)
             db.commit()
-            logger.info(f"閸掔娀娅庨懛顏堚偓澶庡亗閹存劕濮?[{user.username}]: {code}")
+            logger.info(f"Removed stock from watchlist for user [{user.username}]: {code}")
 
         codes = [item.stock_code for item in db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).all()]
         stocks = db.query(Stock).filter(Stock.code.in_(codes)).all() if codes else []
@@ -1040,9 +1349,8 @@ def remove_from_watchlist(code: str, db: Session = Depends(get_db), user: User =
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"閸掔娀娅庨懛顏堚偓澶庡亗婢惰精瑙?[{user.username}] {code}: {e}")
+        logger.error(f"Failed to remove stock from watchlist for user [{user.username}] {code}: {e}")
         raise HTTPException(status_code=500, detail="Failed to remove from watchlist")
-
 
 @app.get("/api/health")
 def health_check():
@@ -1091,7 +1399,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         logger.info(f"User {request.username} not found, attempting auto-create")
         # Auto-create user if not exists (for demo purposes)
         if request.username == "admin" and password == "Test@bcd!234":
-            user = User(username=request.username, password=hash_password(password))
+            user = User(username=request.username, password=hash_password(password), is_active=True, role="admin")
             db.add(user)
             db.commit()
             db.refresh(user)
@@ -1104,6 +1412,10 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     if not verify_password(password, user.password):
         logger.warning(f"Password verification failed for user {request.username}")
         raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    if not user.is_active:
+        logger.warning(f"Inactive user attempted login: {request.username}")
+        raise HTTPException(status_code=403, detail="Account is inactive")
 
     if not is_password_hash(user.password):
         user.password = hash_password(password)
@@ -1119,7 +1431,47 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     db.commit()
     logger.info(f"Login successful for user {request.username}")
 
-    return LoginResponse(token=token, username=user.username)
+    return LoginResponse(
+        token=token,
+        username=user.username,
+        user_id=user.id,
+        role=user.role,
+        is_active=user.is_active,
+    )
+
+
+@app.post("/api/auth/register", response_model=UserResponse)
+def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    username = request.username.strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
+
+    try:
+        password = decrypt_password(request.password)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Password decryption error: {e}")
+        raise HTTPException(status_code=400, detail="Invalid password format")
+
+    strength = validate_password_strength(password)
+    if not strength["valid"]:
+        raise HTTPException(status_code=400, detail=strength["messages"])
+
+    existing_user = db.query(User).filter(User.username == username).first()
+    if existing_user:
+        raise HTTPException(status_code=409, detail="Username already exists")
+
+    user = User(
+        username=username,
+        password=hash_password(password),
+        is_active=False,
+        role="user",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @app.post("/api/auth/change-password")
@@ -1162,7 +1514,44 @@ def check_password_strength(password: str):
 @app.get("/api/auth/verify")
 def verify_token(user: User = Depends(get_current_user)):
     """Verify token is valid and get user info."""
-    return {"valid": True, "username": user.username, "user_id": user.id}
+    return {
+        "valid": True,
+        "username": user.username,
+        "user_id": user.id,
+        "role": user.role,
+        "is_active": user.is_active,
+    }
+
+
+@app.get("/api/admin/users", response_model=list[UserResponse])
+def list_users(_admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    return db.query(User).order_by(User.created_at.desc()).all()
+
+
+@app.patch("/api/admin/users/{user_id}", response_model=UserResponse)
+def update_user(user_id: int, request: UpdateUserRequest, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.id == admin.id:
+        if request.is_active is False:
+            raise HTTPException(status_code=400, detail="Cannot disable yourself")
+        if request.role is not None and request.role != "admin":
+            raise HTTPException(status_code=400, detail="Cannot remove your own admin role")
+
+    if request.role is not None:
+        if request.role not in {"admin", "user"}:
+            raise HTTPException(status_code=400, detail="Invalid role")
+        user.role = request.role
+
+    if request.is_active is not None:
+        user.is_active = request.is_active
+
+    user.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @app.get("/api/auth/generate-password")
@@ -1224,12 +1613,11 @@ def ensure_factor_scores(db: Session, stock: Stock, history: list) -> list[Facto
                         description=factor.description,
                     ))
                 db.commit()
-                logger.info(f"因子评分更新成功: {stock.code}")
+                logger.info(f"Updated factor scores for stock: {stock.code}")
                 return factors
     except Exception as e:
-        logger.error(f"获取财务数据失败: {stock.code}: {e}")
+        logger.error(f"Failed to fetch financial data for stock {stock.code}: {e}")
         db.rollback()
-
     if not factors and history:
         factors = calculate_factors(history)
         if factors:
@@ -1237,10 +1625,10 @@ def ensure_factor_scores(db: Session, stock: Stock, history: list) -> list[Facto
             for factor in factors:
                 db.add(FactorScoreDB(
                     stock_code=stock.code,
-                    key=factor.key,
-                    label=factor.label,
-                    value=factor.value,
-                    description=factor.description,
+                    key=_item_value(factor, "key", ""),
+                    label=_item_value(factor, "label", ""),
+                    value=_item_value(factor, "value", 50),
+                    description=_item_value(factor, "description", ""),
                 ))
             db.commit()
 
@@ -1416,7 +1804,7 @@ def ensure_alerts(db: Session, stock: Stock, history: list, factors: list) -> li
         for alert in alerts:
             db.add(AlertItemDB(stock_code=stock.code, level=alert.level, title=alert.title, message=alert.message))
         db.commit()
-        logger.info(f"风险预警更新成功: {stock.code}")
+        logger.info(f"Updated risk alerts for stock: {stock.code}")
 
     return alerts
 
@@ -1461,7 +1849,7 @@ def ensure_ai_summary(db: Session, stock: Stock, history: list, factors: list, a
     ai_summary = "。".join(summary_parts)
     stock.ai_summary = ai_summary
     db.commit()
-    logger.info(f"AI摘要更新成功: {stock.code}")
+    logger.info(f"Updated AI summary for stock: {stock.code}")
 
     return ai_summary
 
