@@ -1,45 +1,151 @@
 param(
-  [string]$RepoPath = "C:\apps\AIStock-new",
-  [string]$PythonExe = "py"
+  [string]$RepoPath = $PSScriptRoot,
+  [string]$PythonExe = "py",
+  [string[]]$PythonArgs = @("-3"),
+  [int]$BackendPort = 8000,
+  [switch]$OpenFirewall,
+  [switch]$StartBackend
 )
 
 $ErrorActionPreference = "Stop"
 
-if (-not (Test-Path $RepoPath)) {
-  Write-Host "Repository not found at $RepoPath" -ForegroundColor Red
-  exit 1
+function Write-Step {
+  param([string]$Message)
+  Write-Host ""
+  Write-Host $Message -ForegroundColor Cyan
 }
 
-Set-Location $RepoPath
+function Invoke-Checked {
+  param(
+    [string]$Label,
+    [scriptblock]$Command
+  )
 
-Write-Host "[1/6] Creating virtual environment..." -ForegroundColor Cyan
-& $PythonExe -3 -m venv .venv
+  Write-Host "-> $Label"
+  & $Command
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Label failed with exit code $LASTEXITCODE"
+  }
+}
 
-Write-Host "[2/6] Activating virtual environment..." -ForegroundColor Cyan
-. .\.venv\Scripts\Activate.ps1
+function Get-LocalIPv4 {
+  $addresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object {
+      $_.IPAddress -notlike "127.*" -and
+      $_.IPAddress -notlike "169.254.*" -and
+      $_.PrefixOrigin -ne "WellKnown"
+    } |
+    Select-Object -ExpandProperty IPAddress
 
-Write-Host "[3/6] Installing backend dependencies..." -ForegroundColor Cyan
-pip install -r backend\requirements.txt
+  if ($addresses) {
+    return $addresses[0]
+  }
 
-Write-Host "[4/6] Setting runtime environment..." -ForegroundColor Cyan
-$env:DB_HOST = if ($env:DB_HOST) { $env:DB_HOST } else { "127.0.0.1" }
-$env:DB_PORT = if ($env:DB_PORT) { $env:DB_PORT } else { "3306" }
-$env:DB_USERNAME = if ($env:DB_USERNAME) { $env:DB_USERNAME } else { "aistock" }
-$env:DB_PASSWORD = if ($env:DB_PASSWORD) { $env:DB_PASSWORD } else { "AI@stock!234" }
-$env:DB_NAME = if ($env:DB_NAME) { $env:DB_NAME } else { "ai_stock" }
-$env:APP_HOST = if ($env:APP_HOST) { $env:APP_HOST } else { "0.0.0.0" }
-$env:APP_PORT = if ($env:APP_PORT) { $env:APP_PORT } else { "8000" }
+  return "<server-ip>"
+}
 
-Write-Host "[5/6] Opening firewall port 8000..." -ForegroundColor Cyan
+$RepoPath = (Resolve-Path $RepoPath).Path
+$BackendPath = Join-Path $RepoPath "backend"
+$FrontendPath = Join-Path $RepoPath "frontend"
+$VenvPython = Join-Path $RepoPath ".venv\Scripts\python.exe"
+$EnvFile = Join-Path $BackendPath ".env"
+$EnvExample = Join-Path $BackendPath ".env.example"
+
+Write-Host "============================================"
+Write-Host "        AIStock Windows Deploy Helper"
+Write-Host "============================================"
+Write-Host "Repository: $RepoPath"
+
+if (-not (Test-Path $BackendPath)) {
+  throw "Backend directory not found: $BackendPath"
+}
+
+if (-not (Test-Path $FrontendPath)) {
+  throw "Frontend directory not found: $FrontendPath"
+}
+
+Write-Step "[1/7] Checking required tools"
+if (-not (Get-Command $PythonExe -ErrorAction SilentlyContinue)) {
+  throw "Python command not found: $PythonExe. Install Python 3.11+ and try again."
+}
+if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+  throw "npm command not found. Install Node.js LTS and try again."
+}
+
+Invoke-Checked "Python version" { & $PythonExe @PythonArgs --version }
+Invoke-Checked "npm version" { npm --version }
+
+Write-Step "[2/7] Creating Python virtual environment"
+if (-not (Test-Path $VenvPython)) {
+  Invoke-Checked "Create .venv" { & $PythonExe @PythonArgs -m venv (Join-Path $RepoPath ".venv") }
+} else {
+  Write-Host "-> .venv already exists, reusing it"
+}
+
+Write-Step "[3/7] Installing backend dependencies"
+Invoke-Checked "Upgrade pip" { & $VenvPython -m pip install --upgrade pip }
+Invoke-Checked "Install backend requirements" { & $VenvPython -m pip install -r (Join-Path $BackendPath "requirements.txt") }
+
+Write-Step "[4/7] Preparing backend environment file"
+if (-not (Test-Path $EnvFile)) {
+  if (-not (Test-Path $EnvExample)) {
+    throw ".env.example not found: $EnvExample"
+  }
+  Copy-Item $EnvExample $EnvFile
+  Write-Host "-> Created backend\.env from backend\.env.example" -ForegroundColor Yellow
+  Write-Host "-> Edit backend\.env and set DB_PASSWORD, DB_NAME, TUSHARE_TOKEN before production use" -ForegroundColor Yellow
+} else {
+  Write-Host "-> backend\.env already exists, leaving it unchanged"
+}
+
+Write-Step "[5/7] Installing frontend dependencies"
+Push-Location $FrontendPath
 try {
-  netsh advfirewall firewall show rule name="AIStock API" | Out-Null
-  netsh advfirewall firewall set rule name="AIStock API" new enable=yes | Out-Null
-} catch {
-  netsh advfirewall firewall add rule name="AIStock API" dir=in action=allow protocol=TCP localport=8000 | Out-Null
+  Invoke-Checked "npm install" { npm install }
+} finally {
+  Pop-Location
 }
 
-Write-Host "[6/6] Starting backend server..." -ForegroundColor Green
-Write-Host "Open http://<server-ip>:8000/health to verify." -ForegroundColor Yellow
-Write-Host "Press Ctrl+C to stop the server." -ForegroundColor Yellow
-Set-Location backend
-python start.py
+Write-Step "[6/7] Optional Windows firewall rule"
+if ($OpenFirewall) {
+  $ruleName = "AIStock API $BackendPort"
+  try {
+    $existingRule = netsh advfirewall firewall show rule name="$ruleName" 2>$null
+    if ($LASTEXITCODE -eq 0 -and $existingRule) {
+      netsh advfirewall firewall set rule name="$ruleName" new enable=yes | Out-Null
+      Write-Host "-> Enabled existing firewall rule: $ruleName"
+    } else {
+      netsh advfirewall firewall add rule name="$ruleName" dir=in action=allow protocol=TCP localport=$BackendPort | Out-Null
+      Write-Host "-> Added firewall rule: $ruleName"
+    }
+  } catch {
+    Write-Host "-> Failed to update firewall. Run PowerShell as Administrator or open TCP $BackendPort manually." -ForegroundColor Yellow
+  }
+} else {
+  Write-Host "-> Skipped. Re-run with -OpenFirewall to open TCP $BackendPort."
+}
+
+Write-Step "[7/7] Deployment preparation complete"
+$serverIp = Get-LocalIPv4
+Write-Host "Backend local URL:  http://127.0.0.1:$BackendPort"
+Write-Host "Backend device URL: http://$serverIp`:$BackendPort"
+Write-Host ""
+Write-Host "Next steps:" -ForegroundColor Green
+Write-Host "1. Edit backend\.env and confirm database/TuShare settings."
+Write-Host "2. Start backend:"
+Write-Host "   cd backend"
+Write-Host "   ..\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port $BackendPort"
+Write-Host "3. Start frontend:"
+Write-Host "   cd frontend"
+Write-Host "   npm run web"
+Write-Host "4. In mobile app settings, use the real backend IP: $serverIp`:$BackendPort"
+
+if ($StartBackend) {
+  Write-Step "Starting backend now"
+  Push-Location $BackendPath
+  try {
+    & $VenvPython -m uvicorn app.main:app --host 0.0.0.0 --port $BackendPort
+  } finally {
+    Pop-Location
+  }
+}

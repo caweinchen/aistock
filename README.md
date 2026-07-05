@@ -79,6 +79,10 @@ AIStock-new/
 - Expo / React Native 开发环境
 - Android 模拟器可选
 
+如果只是想快速部署一套可运行系统，请优先阅读：
+
+- [Windows 简易部署指南](./docs/DEPLOY_SIMPLE.md)
+
 ## 后端配置
 
 后端读取 `backend/.env` 或项目根目录 `.env`。常用配置如下：
