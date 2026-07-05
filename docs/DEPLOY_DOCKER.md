@@ -28,7 +28,18 @@
 
 ## 国内网络加速说明
 
-`docker\.env.example` 已提供 apt、apk、pip、npm 的国内镜像配置：
+`docker\.env.example` 已提供两类国内镜像配置。
+
+第一类是 Docker 基础镜像地址，影响 `mysql`、`python`、`node`、`nginx` 镜像拉取：
+
+```env
+MYSQL_IMAGE=docker.m.daocloud.io/library/mysql:8.0
+PYTHON_IMAGE=docker.m.daocloud.io/library/python:3.12-slim
+NODE_IMAGE=docker.m.daocloud.io/library/node:22-alpine
+NGINX_IMAGE=docker.m.daocloud.io/library/nginx:1.27-alpine
+```
+
+第二类是容器构建过程中的 apt、apk、pip、npm 下载源：
 
 ```env
 APT_MIRROR=https://mirrors.aliyun.com/debian
@@ -37,9 +48,9 @@ PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 NPM_REGISTRY=https://registry.npmmirror.com
 ```
 
-这些配置只影响 Docker build 过程中容器内部的软件包下载。
+如果部署时仍然看到 `registry-1.docker.io` 超时，说明当前使用的镜像地址仍是 Docker Hub。请确认 `docker\.env` 中已经包含并启用了上面的 `MYSQL_IMAGE`、`PYTHON_IMAGE`、`NODE_IMAGE`、`NGINX_IMAGE`。
 
-如果卡在 `python:3.12-slim`、`node:22-alpine`、`nginx:1.27-alpine`、`mysql:8.0` 这些基础镜像拉取阶段，需要在服务器的 Docker daemon 或 Docker Desktop 中配置 registry mirror。Linux 示例：
+也可以在服务器的 Docker daemon 或 Docker Desktop 中配置 registry mirror。Linux 示例：
 
 ```bash
 sudo mkdir -p /etc/docker

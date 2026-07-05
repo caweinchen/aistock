@@ -1,6 +1,6 @@
 services:
   mysql:
-    image: mysql:8.0
+    image: ${MYSQL_IMAGE:-mysql:8.0}
     container_name: aistock-mysql
     restart: unless-stopped
     environment:
@@ -26,6 +26,7 @@ services:
       context: .
       dockerfile: docker/backend.Dockerfile
       args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.12-slim}
         APT_MIRROR: ${APT_MIRROR:-}
         PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     container_name: aistock-backend
@@ -61,6 +62,8 @@ services:
       context: .
       dockerfile: docker/frontend.Dockerfile
       args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
+        NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
         ALPINE_MIRROR: ${ALPINE_MIRROR:-}
         NPM_REGISTRY: ${NPM_REGISTRY:-}
     container_name: aistock-frontend
