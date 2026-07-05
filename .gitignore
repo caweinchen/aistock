@@ -25,16 +25,24 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
-expo-web*.log
-backend-api*.log
-backend-auth-review*.log
 .trae/
+.worktrees/
+.superpowers/
+
+# logs
+logs/
+.service-logs/
+
+# build artifacts
+AIStock-release.apk
+android-sdk/
 
 # macOS
 .DS_Store
 *.pem
 
 # local env files
+.env
 .env*.local
 .venv/
 

@@ -1,86 +1,276 @@
 # AIStock Mobile
 
-AIStock Mobile 是一个基于 Expo + React Native 的跨平台股票分析 App 原型，同一套代码可用于 Android、iOS 和 Web 预览。
+AIStock Mobile 是一个基于 Expo、React Native 和 FastAPI 的股票分析应用。项目包含移动端/网页前端、Python 后端、MySQL 数据库、用户认证、自选股、个股详情、策略回测、离线登录和本地缓存能力。
 
-## 当前版本
+本项目用于学习、研究和产品原型验证，不构成任何投资建议。
 
-当前实现的是研究型 MVP 首页，包含：
+## 当前功能
 
-- 市场温度、预警数量、策略胜率概览
-- 自选股评分列表
-- 个股因子雷达入口
-- 策略回测摘要
-- 投资风险提示
+### 前端
 
-界面中的行情和评分是模拟数据，方便先验证产品体验。接入真实行情前，不应把这些数据用于投资决策。
+- 登录、注册、退出登录和离线登录
+- 管理员用户管理，包括启用/禁用用户和角色管理
+- 自选股列表、搜索、添加和移除自选股
+- 个股详情页，包括行情、因子评分、策略回测、风险提示、新闻、分红和机构持仓
+- 自定义回测构建器
+- 首页全局搜索、刷新和连接状态提示
+- 简体中文、繁体中文和英文多语言
+- 服务地址配置页，支持 Web、Android 模拟器和本机后端切换
+- 本地缓存，支持后端不可用时读取已缓存数据
 
-## 推荐技术路线
+### 后端
 
-- 移动端：Expo + React Native + TypeScript
-- 数据源：TuShare Pro 或自建数据服务
-- 本地缓存：SQLite / MMKV
-- 服务端：Python FastAPI
-- 数据存储：DuckDB / PostgreSQL
-- 回测引擎：Backtrader 起步，复杂场景再评估 Lean
-- AI 能力：先做研报摘要、风险解释、因子归因，不直接承诺涨跌预测
+- FastAPI API 服务
+- SQLAlchemy 数据模型
+- MySQL 持久化，配置上支持 SQLite
+- PBKDF2 密码哈希
+- RSA 公钥接口，支持前端加密传输密码
+- token 会话认证
+- 用户注册、登录、改密、认证校验和管理员用户管理
+- 自选股、个股详情、价格历史、因子、策略、风险提示和回测接口
+- TuShare / EastMoney 数据服务状态和刷新接口
 
-## 运行
+## 技术栈
 
-```bash
-npm install
-npm run start
+| 层级 | 技术 |
+| --- | --- |
+| 前端 | Expo 56、React Native、TypeScript、Vitest |
+| 后端 | Python、FastAPI、SQLAlchemy、unittest |
+| 数据库 | MySQL，支持 SQLite 配置 |
+| 存储 | Web localStorage、Native AsyncStorage |
+| 数据源 | TuShare / EastMoney / 本地数据库 |
+
+## 项目结构
+
+```text
+AIStock-new/
+├─ frontend/
+│  ├─ App.tsx
+│  ├─ src/
+│  │  ├─ components/
+│  │  ├─ hooks/
+│  │  ├─ i18n/
+│  │  ├─ pages/
+│  │  ├─ services/
+│  │  ├─ types/
+│  │  └─ utils/
+│  └─ package.json
+├─ backend/
+│  ├─ app/
+│  │  ├─ main.py
+│  │  ├─ database.py
+│  │  ├─ config.py
+│  │  ├─ security.py
+│  │  ├─ rsa_utils.py
+│  │  └─ tushare_service.py
+│  ├─ tests/
+│  └─ requirements.txt
+├─ db/
+├─ docs/
+├─ start_backend.bat
+└─ README.md
 ```
 
-常用平台命令：
+## 环境要求
 
-```bash
-npm run android
-npm run ios
+- Node.js 和 npm
+- Python 3.11+，当前开发环境使用 Python 3.14
+- MySQL 8.x
+- Expo / React Native 开发环境
+- Android 模拟器可选
+
+## 后端配置
+
+后端读取 `backend/.env` 或项目根目录 `.env`。常用配置如下：
+
+```env
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USERNAME=aistock
+DB_PASSWORD=AI@stock!234
+DB_NAME=ai_stock
+DB_DIALECT=mysql
+DB_DRIVER=mysqlconnector
+
+APP_HOST=0.0.0.0
+APP_PORT=8000
+
+TUSHARE_ENABLED=true
+TUSHARE_TOKEN=your_token
+```
+
+默认后端地址是：
+
+```text
+http://127.0.0.1:8000
+```
+
+Android 模拟器访问宿主机后端时，应在前端服务配置页使用：
+
+```text
+10.0.2.2:8000
+```
+
+## 启动后端
+
+在项目根目录执行：
+
+```powershell
+python -m pip install -r backend\requirements.txt
+cd backend
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+或使用项目脚本：
+
+```powershell
+.\start_backend.bat
+```
+
+健康检查：
+
+```powershell
+Invoke-WebRequest http://127.0.0.1:8000/api/health -UseBasicParsing
+```
+
+## 启动前端
+
+```powershell
+cd frontend
+npm install
 npm run web
 ```
 
-说明：iOS 原生构建需要 macOS 和 Xcode。在 Windows 上可以用 Expo Go 预览，或使用 EAS Build 云端打包。
+常用脚本：
 
-## 后端接口
-
-项目已包含一个 FastAPI 后端原型：
-
-```bash
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+```powershell
+npm run web      # Web 预览
+npm run android  # Android
+npm run ios      # iOS
+npm test -- --run
 ```
 
-核心接口：
+## 测试账号
 
-- `GET /api/stocks`：返回自选股列表
-- `GET /api/stocks/search?q=keyword`：按股票代码或名称搜索
-- `GET /api/watchlist`：返回自选股列表
-- `POST /api/watchlist/{code}`：加入自选股
-- `DELETE /api/watchlist/{code}`：移出自选股
-- `GET /api/stocks/{code}`：返回选中股票的详情、因子、策略、预警和 AI 摘要
-- `GET /api/stocks/{code}/factors`：返回因子评分
-- `GET /api/stocks/{code}/strategies`：返回策略回测摘要
-- `GET /api/stocks/{code}/strategies/{strategy_id}`：返回单个策略的规则、指标和交易明细
-- `GET /api/stocks/{code}/alerts`：返回风险提示
-- `GET /api/stocks/{code}/history`：返回价格走势数据
+| 用户名 | 密码 | 角色 |
+| --- | --- | --- |
+| admin | Test@bcd!234 | admin |
+| Test | Test@bcd!234 | user |
+| demo | Demo@123! | user |
+| user | User@456! | user |
 
-移动端当前会自动连接：
+注册的新用户默认未启用，需要管理员在用户管理页启用后才能登录。
 
-- Web / iOS 模拟器：`http://127.0.0.1:8000`
-- Android 模拟器：`http://10.0.2.2:8000`
+## 离线登录和缓存
 
-如果用真实手机预览，需要把 `App.tsx` 里的 `API_BASE_URL` 改成本机局域网 IP，例如 `http://192.168.1.10:8000`。
-同时后端需要这样启动，允许局域网设备访问：
+项目包含两类本地数据：
 
-```bash
-.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+- **离线登录凭据**：在线登录成功后保存本地密码哈希。后端不可用时，前端会用本地哈希校验用户名和密码，校验通过后生成 `offline_` token。
+- **业务数据缓存**：股票列表、搜索结果、个股详情、策略详情、分红、新闻、机构持仓等数据会按用户命名空间写入本地存储。
+
+行为说明：
+
+- 在线登录成功后会保存离线登录凭据。
+- 首页在线加载且本地无股票缓存时，会主动拉取股票列表并写入缓存。
+- 手动刷新自选股会刷新股票列表，并尽量缓存对应个股的详情数据。
+- 后端断开、超时、网络失败或返回 5xx 时，登录会尝试离线回退。
+- 401/403 不会走离线回退，避免密码错误或账号禁用时绕过后端。
+- 退出登录会清除在线 token，但保留离线登录所需的密码哈希。
+
+## API 摘要
+
+### 认证
+
+- `GET /api/auth/public-key`
+- `POST /api/auth/login`
+- `POST /api/auth/register`
+- `POST /api/auth/change-password`
+- `POST /api/auth/validate-password`
+- `GET /api/auth/verify`
+- `GET /api/auth/generate-password`
+
+### 管理员
+
+- `GET /api/admin/users`
+- `PATCH /api/admin/users/{user_id}`
+
+### 股票和自选股
+
+- `GET /api/stocks`
+- `GET /api/stocks/refresh-all`
+- `GET /api/stocks/search?q=keyword`
+- `GET /api/stocks/{code}`
+- `GET /api/stocks/{code}/refresh`
+- `GET /api/stocks/{code}/history`
+- `GET /api/stocks/{code}/realtime`
+- `GET /api/stocks/{code}/factors`
+- `GET /api/stocks/{code}/alerts`
+- `GET /api/stocks/{code}/strategies`
+- `GET /api/stocks/{code}/strategies/{strategy_id}`
+- `GET /api/stocks/{code}/dividend`
+- `GET /api/stocks/{code}/news`
+- `GET /api/stocks/{code}/adj-factor`
+- `GET /api/stocks/{code}/inst-hold`
+- `GET /api/watchlist`
+- `POST /api/watchlist/{code}`
+- `DELETE /api/watchlist/{code}`
+
+### 回测和数据源
+
+- `POST /api/backtests`
+- `GET /api/tushare/status`
+- `GET /api/eastmoney/status`
+- `GET /api/eastmoney/refresh/{code}`
+
+### 系统
+
+- `GET /api/health`
+
+## 测试
+
+前端：
+
+```powershell
+cd frontend
+npm test -- --run
 ```
 
-## 下一步
+后端：
 
-1. 抽出 `src/` 目录，拆分页面、组件和数据服务。
-2. 增加自选股搜索、详情页和回测详情页。
-3. 建立后端 API，统一封装行情、财务、策略回测和 AI 解释。
-4. 加入登录、数据缓存、错误状态和免责声明。
-5. 准备应用商店上架所需的隐私政策和合规文案。
+```powershell
+$env:PYTHONPATH='backend'
+python -m unittest discover -s backend/tests
+```
+
+注意：部分后端加密接口测试会请求 `localhost:8000`，运行完整后端测试前需要先启动后端服务。
+
+## 常见问题
+
+### Web 能登录，Android 模拟器不能登录
+
+Android 模拟器里的 `127.0.0.1` 指向模拟器自身，不是宿主机。请在前端设置页把服务器地址改成：
+
+```text
+10.0.2.2:8000
+```
+
+### 后端关闭后不能离线登录
+
+请确认这个账号至少成功在线登录过一次。只有在线登录成功后，本地才会保存离线登录密码哈希。仅刷新股票数据不会生成离线登录凭据。
+
+### 有缓存但仍然登录失败
+
+股票缓存和离线登录凭据是两套数据。股票缓存只能用于进入系统后展示数据，登录页是否放行取决于本地密码哈希是否存在且匹配。
+
+### 后端测试连接失败
+
+如果 `test_auth_encryption.py` 报 `ConnectionRefusedError`，说明 `localhost:8000` 后端服务没有启动。先启动后端再运行完整测试。
+
+## 法律声明
+
+本项目仅用于学习、研究和产品原型验证，不提供任何投资建议。股票投资有风险，入市需谨慎。项目中的分析结果、评分、策略和行情数据不保证准确性、完整性和实时性，不应作为投资决策的唯一依据。
+
+详细法律条款请参阅：
+
+- [隐私政策](./PRIVACY.md)
+- [服务条款](./TERMS.md)
