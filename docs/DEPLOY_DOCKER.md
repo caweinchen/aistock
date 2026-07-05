@@ -26,6 +26,35 @@
 
 如果端口已被占用，可以在 `docker\.env` 中修改。
 
+## 国内网络加速说明
+
+`docker\.env.example` 已提供 apt、apk、pip、npm 的国内镜像配置：
+
+```env
+APT_MIRROR=https://mirrors.aliyun.com/debian
+ALPINE_MIRROR=https://mirrors.aliyun.com/alpine
+PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+NPM_REGISTRY=https://registry.npmmirror.com
+```
+
+这些配置只影响 Docker build 过程中容器内部的软件包下载。
+
+如果卡在 `python:3.12-slim`、`node:22-alpine`、`nginx:1.27-alpine`、`mysql:8.0` 这些基础镜像拉取阶段，需要在服务器的 Docker daemon 或 Docker Desktop 中配置 registry mirror。Linux 示例：
+
+```bash
+sudo mkdir -p /etc/docker
+sudo tee /etc/docker/daemon.json >/dev/null <<'EOF'
+{
+  "registry-mirrors": [
+    "https://docker.m.daocloud.io"
+  ]
+}
+EOF
+sudo systemctl restart docker
+```
+
+Windows Docker Desktop：进入 Settings -> Docker Engine，在 JSON 中加入 `registry-mirrors` 后 Apply & Restart。
+
 ## 第 1 步：准备 Docker 环境变量
 
 在项目根目录执行：

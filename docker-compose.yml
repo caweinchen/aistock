@@ -25,6 +25,9 @@ services:
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
+      args:
+        APT_MIRROR: ${APT_MIRROR:-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
     container_name: aistock-backend
     restart: unless-stopped
     environment:
@@ -57,6 +60,9 @@ services:
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
+      args:
+        ALPINE_MIRROR: ${ALPINE_MIRROR:-}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
     container_name: aistock-frontend
     restart: unless-stopped
     ports:
