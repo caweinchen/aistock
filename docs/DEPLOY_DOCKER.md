@@ -1,6 +1,6 @@
 # AIStock Docker 本机部署测试指南
 
-这份文档用于在本机用 Docker 部署并测试 AIStock。部署后会启动 3 个容器：
+这份文档用于用 Docker 部署并测试 AIStock。部署后会启动 3 个容器：
 
 - `aistock-mysql`：MySQL 8.0 数据库
 - `aistock-backend`：FastAPI 后端，默认映射到本机 `8000`
@@ -18,7 +18,125 @@
   - `8000`：后端 API
   - `8080`：前端 Web
 
-Windows Docker Desktop 必须使用 Linux containers。右键系统托盘里的 Docker Desktop 图标，如果看到 `Switch to Linux containers...`，请点击切换；如果看到 `Switch to Windows containers...`，说明当前已经是 Linux containers。
+### Windows Server 2026 重要说明
+
+本项目 Docker 方案使用的是 Linux 容器镜像：
+
+- `mysql:8.0`
+- `python:3.12-slim`
+- `node:22-alpine`
+- `nginx:1.27-alpine`
+
+如果 Windows Server 2026 上的 Docker 当前运行在 Windows containers 模式，会出现类似错误：
+
+```text
+no matching manifest for windows/amd64 ... in the manifest list entries
+```
+
+这不是镜像源问题，而是容器平台不匹配。Windows containers 不能运行这些 Linux 镜像。
+
+推荐做法：
+
+1. **生产部署推荐**：使用 Linux 服务器或 Linux 虚拟机运行 Docker。
+2. **Windows Server 测试部署**：在 Windows Server 上安装 WSL2 + Ubuntu，然后在 Ubuntu 里安装 Docker Engine，并在 Ubuntu 终端里执行本文的 Docker Compose 命令。
+3. **不推荐**：把本项目改成 Windows containers。MySQL、Node、Nginx、Python 依赖链都会复杂很多，维护成本高。
+
+Microsoft 官方文档说明 Windows Server 2022/2025 支持安装 WSL。Windows Server 2026 环境下也应优先走 WSL2/Ubuntu 方式来运行 Linux 容器。
+
+如果你使用的是 Docker Desktop，必须切换到 Linux containers。右键系统托盘里的 Docker Desktop 图标，如果看到 `Switch to Linux containers...`，请点击切换；如果看到 `Switch to Windows containers...`，说明当前已经是 Linux containers。
+
+## Windows Server 2026 推荐部署方式：WSL2 + Ubuntu
+
+在 Windows Server 2026 的管理员 PowerShell 中执行：
+
+```powershell
+wsl --install -d Ubuntu-24.04
+```
+
+安装完成后重启服务器。重启后进入 Ubuntu：
+
+```powershell
+wsl -d Ubuntu-24.04
+```
+
+以下命令都在 Ubuntu 终端中执行。
+
+安装基础工具：
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl git
+```
+
+安装 Docker Engine：
+
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+```
+
+退出 Ubuntu 后重新进入，让 docker 用户组生效：
+
+```bash
+exit
+```
+
+再次进入：
+
+```powershell
+wsl -d Ubuntu-24.04
+```
+
+验证 Docker：
+
+```bash
+docker --version
+docker compose version
+```
+
+拉取项目代码：
+
+```bash
+git clone https://github.com/caweinchen/aistock.git
+cd aistock
+```
+
+复制配置：
+
+```bash
+cp docker/.env.example docker/.env
+```
+
+编辑配置：
+
+```bash
+nano docker/.env
+```
+
+至少修改：
+
+```env
+MYSQL_ROOT_PASSWORD=你的MySQLRoot密码
+DB_PASSWORD=你的应用数据库密码
+```
+
+启动：
+
+```bash
+docker compose --env-file docker/.env up -d --build
+```
+
+查看状态：
+
+```bash
+docker compose --env-file docker/.env ps
+```
+
+验证后端：
+
+```bash
+curl http://127.0.0.1:8000/api/health
+```
 
 ### 可选
 
@@ -125,6 +243,12 @@ NPM_REGISTRY=https://registry.npmmirror.com
 
 ```powershell
 docker compose --env-file docker\.env up -d --build
+```
+
+如果是在 WSL2/Ubuntu 或 Linux 服务器中执行，路径分隔符使用 `/`：
+
+```bash
+docker compose --env-file docker/.env up -d --build
 ```
 
 第一次启动会：
