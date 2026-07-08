@@ -289,6 +289,13 @@ export const en = {
     noCachedData: 'You are currently offline and no cached data is available. Please connect to the internet and refresh.',
     connectAndRefresh: 'Connect & Refresh',
     noAlerts: 'No alerts',
+    watchlistInsights: 'Today\'s Watchlist Reference',
+    watchlistRiskOverview: 'Watchlist Risk Overview',
+    groupPositive: 'Focus',
+    groupWatch: 'Keep Watching',
+    groupCautious: 'Use Caution',
+    groupInsufficientData: 'Insufficient Data',
+    investmentDisclaimer: 'For learning and analysis only. Not investment advice.',
   },
   chart: {
     title: 'Price Trend',

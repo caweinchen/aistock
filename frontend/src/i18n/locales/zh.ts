@@ -289,6 +289,13 @@ export const zh = {
     noCachedData: '当前处于离线状态，且暂无缓存数据。请连接网络后刷新获取数据。',
     connectAndRefresh: '连接并刷新',
     noAlerts: '暂无风险提示',
+    watchlistInsights: '今日自选股参考',
+    watchlistRiskOverview: '自选股风险概览',
+    groupPositive: '重点关注',
+    groupWatch: '继续观察',
+    groupCautious: '谨慎关注',
+    groupInsufficientData: '数据不足',
+    investmentDisclaimer: '仅供学习和分析参考，不构成投资建议。',
   },
   chart: {
     title: '价格走势',

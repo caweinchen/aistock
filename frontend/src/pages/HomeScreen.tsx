@@ -7,10 +7,12 @@ import { AlertCard } from '../components/AlertCard';
 import { PriceChart } from '../components/PriceChart';
 import { BacktestBuilder } from '../components/BacktestBuilder';
 import { useStockData } from '../hooks/useStockData';
+import { getWatchlistInsights } from '../services/api';
 import { formatPrice, formatUpdatedAt, getChangeColor } from '../utils/formatters';
-import type { ResearchSnapshot, StrategyTemplate } from '../types';
+import type { ReferenceStatus, ResearchSnapshot, StrategyTemplate, WatchlistInsights } from '../types';
 import { useEffect, useState } from 'react';
 import { useTranslation } from '../i18n';
+import type { TranslationSchema } from '../i18n/types';
 
 interface HomeScreenProps {
   onOpenSettings?: () => void;
@@ -79,6 +81,8 @@ export function HomeScreen({
   const [lookbackDays, setLookbackDays] = useState(180);
   const [isCreatingBacktest, setIsCreatingBacktest] = useState(false);
   const [isRefreshingWatchlist, setIsRefreshingWatchlist] = useState(false);
+  const [watchlistInsights, setWatchlistInsights] = useState<WatchlistInsights | null>(null);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
 
   useEffect(() => {
     if (pendingSearchQuery !== null) {
@@ -168,11 +172,35 @@ export function HomeScreen({
     if (updated && onWatchlistUpdated) {
       onWatchlistUpdated();
     }
+    if (updated) {
+      void loadWatchlistInsights();
+    }
   };
+
+  const loadWatchlistInsights = async () => {
+    setIsLoadingInsights(true);
+    try {
+      const insights = await getWatchlistInsights();
+      setWatchlistInsights(insights);
+    } catch {
+      setWatchlistInsights(null);
+    } finally {
+      setIsLoadingInsights(false);
+    }
+  };
+
+  useEffect(() => {
+    if (stocks.length) {
+      void loadWatchlistInsights();
+    } else {
+      setWatchlistInsights(null);
+    }
+  }, [stocks.length]);
 
   const handleRefreshWatchlist = async () => {
     setIsRefreshingWatchlist(true);
     await refreshWatchlist();
+    await loadWatchlistInsights();
     setIsRefreshingWatchlist(false);
   };
 
@@ -228,6 +256,39 @@ export function HomeScreen({
           )}
         </Pressable>
       </View>
+
+      {(watchlistInsights || isLoadingInsights) && (
+        <View style={styles.insightPanel}>
+          <View style={styles.insightHeader}>
+            <Text style={styles.sectionTitle}>{t.home.watchlistInsights}</Text>
+            {isLoadingInsights && <ActivityIndicator size="small" color="#0F8B8D" />}
+          </View>
+          {watchlistInsights && (
+            <>
+              <Text style={styles.subtleText}>{watchlistInsights.risk_overview}</Text>
+              {(['positive', 'watch', 'cautious', 'insufficient_data'] as const).map((groupKey) => {
+                const items = watchlistInsights.groups[groupKey] ?? [];
+                return (
+                  <View key={groupKey} style={styles.insightGroup}>
+                    <Text style={styles.insightGroupTitle}>{groupTitle(groupKey, t)}</Text>
+                    {items.length ? (
+                      items.slice(0, 3).map((stock) => (
+                        <Pressable key={stock.code} style={styles.insightItem} onPress={() => handleStockPress(stock.code)}>
+                          <Text style={styles.insightName}>{stock.name}</Text>
+                          <Text style={styles.insightReason}>{stock.primary_support ?? stock.reference_label}</Text>
+                        </Pressable>
+                      ))
+                    ) : (
+                      <Text style={styles.insightEmpty}>{t.home.noStocks}</Text>
+                    )}
+                  </View>
+                );
+              })}
+              <Text style={styles.disclaimerText}>{watchlistInsights.disclaimer}</Text>
+            </>
+          )}
+        </View>
+      )}
 
       <View style={styles.stockList}>
         {stocks.map((stock) => (
@@ -339,6 +400,15 @@ function LoadingBlock({ label }: { label: string }) {
   );
 }
 
+function groupTitle(status: ReferenceStatus, t: TranslationSchema): string {
+  return {
+    positive: t.home.groupPositive,
+    watch: t.home.groupWatch,
+    cautious: t.home.groupCautious,
+    insufficient_data: t.home.groupInsufficientData,
+  }[status];
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 20, paddingBottom: 36, gap: 18 },
@@ -377,6 +447,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
+  insightPanel: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#D8DEE9',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 12,
+    padding: 16,
+  },
+  insightHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  insightGroup: { gap: 8 },
+  insightGroupTitle: { color: '#162033', fontSize: 14, fontWeight: '800' },
+  insightItem: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+    padding: 10,
+  },
+  insightName: { color: '#162033', fontSize: 14, fontWeight: '800' },
+  insightReason: { color: '#4B5563', fontSize: 12, lineHeight: 18 },
+  insightEmpty: { color: '#9CA3AF', fontSize: 12 },
+  disclaimerText: { color: '#6B7280', fontSize: 12, lineHeight: 18 },
   emptyText: { color: '#6B7280', padding: 16 },
   currentPanel: {
     backgroundColor: '#FFFFFF',

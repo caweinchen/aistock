@@ -567,11 +567,11 @@ git commit -m "feat: add watchlist insight client types"
 - 使用 `getWatchlistInsights`。
 - 按以下顺序展示分组：`positive`、`watch`、`cautious`、`insufficient_data`。
 
-- [ ] **步骤 1：前端修改前阅读 Expo 56 文档**
+- [x] **步骤 1：前端修改前阅读 Expo 56 文档**
 
 打开 `https://docs.expo.dev/versions/v56.0.0/`，确认本任务使用的 React Native 基础组件 `View`、`Text`、`Pressable`、`ActivityIndicator` 没有 Expo 56 特殊限制。
 
-- [ ] **步骤 2：新增文案**
+- [x] **步骤 2：新增文案**
 
 在各语言文件的 `home` 下新增等价文案：
 
@@ -585,7 +585,7 @@ groupInsufficientData: '数据不足',
 investmentDisclaimer: '仅供学习和分析参考，不构成投资建议。',
 ```
 
-- [ ] **步骤 3：在 `HomeScreen.tsx` 中加载洞察数据**
+- [x] **步骤 3：在 `HomeScreen.tsx` 中加载洞察数据**
 
 新增状态：
 
@@ -606,7 +606,7 @@ try {
 }
 ```
 
-- [ ] **步骤 4：在股票列表上方渲染分组卡片**
+- [x] **步骤 4：在股票列表上方渲染分组卡片**
 
 在现有 `stockList` 之前渲染：
 
@@ -646,7 +646,7 @@ function groupTitle(status: ReferenceStatus, t: Translation): string {
 
 如果本地 i18n 类型名称不同，从 `frontend/src/i18n/types.ts` 导入项目实际使用的类型。
 
-- [ ] **步骤 5：运行前端测试**
+- [x] **步骤 5：运行前端测试**
 
 ```powershell
 cd frontend
@@ -655,7 +655,7 @@ npm test -- --run
 
 预期：通过。
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```powershell
 git add frontend/src/pages/HomeScreen.tsx frontend/src/i18n/locales/zh.ts frontend/src/i18n/locales/zh-Hant.ts frontend/src/i18n/locales/en.ts

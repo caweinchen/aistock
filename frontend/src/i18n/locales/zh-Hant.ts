@@ -289,6 +289,13 @@ export const zhHant = {
     noCachedData: '當前處於離線狀態，且暫無緩存數據。請連接網絡後刷新獲取數據。',
     connectAndRefresh: '連接並刷新',
     noAlerts: '暫無風險提示',
+    watchlistInsights: '今日自選股參考',
+    watchlistRiskOverview: '自選股風險概覽',
+    groupPositive: '重點關注',
+    groupWatch: '繼續觀察',
+    groupCautious: '謹慎關注',
+    groupInsufficientData: '數據不足',
+    investmentDisclaimer: '僅供學習和分析參考，不構成投資建議。',
   },
   chart: {
     title: '價格走勢',
