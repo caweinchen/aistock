@@ -30,7 +30,12 @@ export const zh = {
     sell: '谨慎',
   },
   detail: {
-    institutionHoldings: '机构持仓',
+    institutionHoldings: '重要股东变动',
+    ordinarySummary: '普通用户摘要',
+    supportFactors: '主要支撑因素',
+    riskFactors: '主要风险因素',
+    dataHealth: '数据健康',
+    importantHolderChanges: '重要股东变动',
     date: '日期',
     instType: '类型',
     holdAmount: '持仓(万股)',

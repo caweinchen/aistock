@@ -675,7 +675,7 @@ git commit -m "feat: show watchlist insights on home"
 **接口：**
 - 使用 `ordinary_summary`、`support_factors`、`risk_factors`、`data_completeness`、`data_updated_at`、`disclaimer`。
 
-- [ ] **步骤 1：新增文案**
+- [x] **步骤 1：新增文案**
 
 在 `detail` 下新增：
 
@@ -689,7 +689,7 @@ importantHolderChanges: '重要股东变动',
 
 将中文语言文件里的 `institutionHoldings` 文案从“机构持仓”改为“重要股东变动”，英文改为 `Important Holder Changes`。
 
-- [ ] **步骤 2：在价格卡下方渲染摘要**
+- [x] **步骤 2：在价格卡下方渲染摘要**
 
 在 `StockDetailScreen.tsx` 的价格面板之后增加：
 
@@ -705,7 +705,7 @@ importantHolderChanges: '重要股东变动',
 </View>
 ```
 
-- [ ] **步骤 3：在因子区前展示支撑因素和风险因素**
+- [x] **步骤 3：在因子区前展示支撑因素和风险因素**
 
 新增：
 
@@ -724,7 +724,7 @@ importantHolderChanges: '重要股东变动',
 )}
 ```
 
-- [ ] **步骤 4：运行前端测试**
+- [x] **步骤 4：运行前端测试**
 
 ```powershell
 cd frontend
@@ -733,7 +733,7 @@ npm test -- --run
 
 预期：通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add frontend/src/pages/StockDetailScreen.tsx frontend/src/i18n/locales/zh.ts frontend/src/i18n/locales/zh-Hant.ts frontend/src/i18n/locales/en.ts

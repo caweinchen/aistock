@@ -30,7 +30,12 @@ export const zhHant = {
     sell: '謹慎',
   },
   detail: {
-    institutionHoldings: '機構持倉',
+    institutionHoldings: '重要股東變動',
+    ordinarySummary: '普通用戶摘要',
+    supportFactors: '主要支撐因素',
+    riskFactors: '主要風險因素',
+    dataHealth: '數據健康',
+    importantHolderChanges: '重要股東變動',
     date: '日期',
     instType: '類型',
     holdAmount: '持倉(萬股)',

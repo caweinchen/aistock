@@ -30,7 +30,12 @@ export const en = {
     sell: 'Sell',
   },
   detail: {
-    institutionHoldings: 'Institutional Holdings',
+    institutionHoldings: 'Important Holder Changes',
+    ordinarySummary: 'Ordinary User Summary',
+    supportFactors: 'Main Support Factors',
+    riskFactors: 'Main Risk Factors',
+    dataHealth: 'Data Health',
+    importantHolderChanges: 'Important Holder Changes',
     date: 'Date',
     instType: 'Type',
     holdAmount: 'Holdings (10K)',

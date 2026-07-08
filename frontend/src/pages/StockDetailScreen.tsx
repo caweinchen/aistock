@@ -290,7 +290,31 @@ export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchS
         </View>
       </View>
 
+      <View style={styles.summaryPanel}>
+        <Text style={styles.sectionTitle}>{t.detail.ordinarySummary}</Text>
+        <Text style={styles.summaryText}>{detail.ordinary_summary ?? detail.ai_summary}</Text>
+        <View style={styles.dataHealthRow}>
+          <Text style={styles.dataHealthLabel}>{t.detail.dataHealth}</Text>
+          <Text style={styles.dataHealthValue}>{detail.data_completeness ?? detail.data_status}</Text>
+        </View>
+        <Text style={styles.disclaimerText}>{detail.disclaimer ?? t.home.investmentDisclaimer}</Text>
+      </View>
+
       {history.length > 0 && <PriceChart stock={stock} history={history} />}
+
+      {Boolean(detail.support_factors?.length) && (
+        <View style={styles.reasonPanel}>
+          <Text style={styles.sectionTitle}>{t.detail.supportFactors}</Text>
+          {detail.support_factors!.map((item) => <Text key={item} style={styles.reasonText}>• {item}</Text>)}
+        </View>
+      )}
+
+      {Boolean(detail.risk_factors?.length) && (
+        <View style={styles.reasonPanel}>
+          <Text style={styles.sectionTitle}>{t.detail.riskFactors}</Text>
+          {detail.risk_factors!.map((item) => <Text key={item} style={styles.reasonText}>• {item}</Text>)}
+        </View>
+      )}
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>{t.factor.title}</Text>
@@ -593,6 +617,35 @@ const styles = StyleSheet.create({
   },
   scoreValue: { fontSize: 28, fontWeight: '800' },
   signalText: { color: '#6B7280', fontSize: 12 },
+  summaryPanel: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 10,
+    padding: 16,
+  },
+  summaryText: { color: '#374151', fontSize: 14, lineHeight: 22 },
+  dataHealthRow: {
+    alignItems: 'center',
+    borderTopColor: '#EEF2F7',
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+  },
+  dataHealthLabel: { color: '#6B7280', fontSize: 13 },
+  dataHealthValue: { color: '#162033', fontSize: 13, fontWeight: '800' },
+  disclaimerText: { color: '#6B7280', fontSize: 12, lineHeight: 18 },
+  reasonPanel: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    padding: 16,
+  },
+  reasonText: { color: '#4B5563', fontSize: 13, lineHeight: 20 },
   sectionHeader: { marginTop: 8 },
   sectionTitle: { color: '#162033', fontSize: 18, fontWeight: '800' },
   factorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
