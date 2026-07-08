@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DividendRecord, InstHoldRecord, StockDetail, StockNews, StockSummary, StrategyDetail } from '../types';
+import type { DividendRecord, InstHoldRecord, StockDetail, StockNews, StockSummary, StrategyDetail, WatchlistInsights } from '../types';
 
 const stock: StockSummary = {
   code: '000001.SZ',
@@ -42,6 +42,19 @@ const strategyDetail: StrategyDetail = {
 const detailWithStrategy: StockDetail = {
   ...detail,
   strategies: [strategyDetail.strategy],
+};
+
+const watchlistInsights: WatchlistInsights = {
+  total: 1,
+  groups: {
+    positive: [stock],
+    watch: [],
+    cautious: [],
+    insufficient_data: [],
+  },
+  risk_overview: '当前自选股未发现集中高风险提示，仍需结合仓位和估值检查。',
+  data_updated_at: '2026-06-29T00:00:00Z',
+  disclaimer: '仅供学习和分析参考，不构成投资建议。',
 };
 
 const dividend: DividendRecord[] = [{
@@ -188,6 +201,24 @@ describe('api cache policy', () => {
       fromCache: true,
       isOffline: false,
     });
+  });
+
+  it('fetches watchlist insights with auth headers', async () => {
+    mockLocalDb();
+    const fetchSpy = vi.fn(async (url: string) => {
+      if (url.endsWith('/api/watchlist/insights')) {
+        return { ok: true, json: async () => watchlistInsights };
+      }
+      return { ok: false, json: async () => ({}) };
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    const { getWatchlistInsights } = await import('./api');
+
+    await expect(getWatchlistInsights()).resolves.toEqual(watchlistInsights);
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://server.test/api/watchlist/insights',
+      { headers: { Authorization: 'Bearer token' } },
+    );
   });
 
   it('marks refresh as offline when React Native reports Network request failed', async () => {

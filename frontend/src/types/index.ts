@@ -1,4 +1,6 @@
 export type Signal = 'neutral' | 'buy' | 'sell';
+export type ReferenceStatus = 'positive' | 'watch' | 'cautious' | 'insufficient_data';
+export type DataCompleteness = 'complete' | 'mostly_complete' | 'incomplete' | 'insufficient';
 export type RiskLevel = 'low' | 'medium' | 'high';
 export type StrategyTemplate = 'trend-breakout' | 'low-valuation-reversal' | 'dividend-defense';
 
@@ -9,6 +11,12 @@ export interface StockSummary {
   change_percent: number;
   score: number;
   signal: Signal;
+  reference_status?: ReferenceStatus;
+  reference_label?: string;
+  primary_support?: string;
+  primary_risk?: string;
+  data_completeness?: DataCompleteness;
+  data_updated_at?: string | null;
 }
 
 export interface FactorScore {
@@ -67,6 +75,20 @@ export interface StockDetail {
   ai_summary: string;
   data_status: string;
   updated_at: string;
+  ordinary_summary?: string;
+  support_factors?: string[];
+  risk_factors?: string[];
+  data_completeness?: DataCompleteness;
+  data_updated_at?: string | null;
+  disclaimer?: string;
+}
+
+export interface WatchlistInsights {
+  total: number;
+  groups: Record<ReferenceStatus, StockSummary[]>;
+  risk_overview: string;
+  data_updated_at?: string | null;
+  disclaimer: string;
 }
 
 export interface ResearchSnapshot {

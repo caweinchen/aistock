@@ -16,6 +16,7 @@ import type {
   InstHoldRecord,
   AppUser,
   LoginResponse,
+  WatchlistInsights,
 } from '../types';
 import { getApiBaseUrl, getAuthToken } from './storage';
 import * as localDb from './localDb';
@@ -138,6 +139,14 @@ export async function searchStocks(keyword: string): Promise<{ data: StockSummar
     }
     throw err;
   }
+}
+
+export async function getWatchlistInsights(): Promise<WatchlistInsights> {
+  const response = await fetch(`${getApiBase()}/api/watchlist/insights`, {
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) throw new Error('fetchWatchlistInsights');
+  return response.json() as Promise<WatchlistInsights>;
 }
 
 // ============================================

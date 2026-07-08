@@ -480,7 +480,7 @@ git commit -m "feat: add watchlist insights endpoint"
 - 消费后端 `WatchlistInsights`。
 - 新增 `getWatchlistInsights()`。
 
-- [ ] **步骤 1：新增类型**
+- [x] **步骤 1：新增类型**
 
 在 `frontend/src/types/index.ts` 中新增：
 
@@ -523,7 +523,7 @@ export interface WatchlistInsights {
 }
 ```
 
-- [ ] **步骤 2：新增 API 函数**
+- [x] **步骤 2：新增 API 函数**
 
 在 `frontend/src/services/api.ts` 中导入 `WatchlistInsights`，并新增：
 
@@ -537,7 +537,7 @@ export async function getWatchlistInsights(): Promise<WatchlistInsights> {
 }
 ```
 
-- [ ] **步骤 3：运行前端测试**
+- [x] **步骤 3：运行前端测试**
 
 ```powershell
 cd frontend
@@ -546,7 +546,7 @@ npm test -- --run
 
 预期：现有测试通过。
 
-- [ ] **步骤 4：提交**
+- [x] **步骤 4：提交**
 
 ```powershell
 git add frontend/src/types/index.ts frontend/src/services/api.ts
