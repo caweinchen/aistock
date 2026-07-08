@@ -206,6 +206,12 @@ class StockDetail(BaseModel):
     ai_summary: str | None = None
     data_status: str
     updated_at: datetime | None = None
+    ordinary_summary: str
+    support_factors: list[str]
+    risk_factors: list[str]
+    data_completeness: DataCompleteness
+    data_updated_at: datetime | None = None
+    disclaimer: str = "仅供学习和分析参考，不构成投资建议。"
 
 
 app = FastAPI(
@@ -307,6 +313,38 @@ def build_primary_risk(status: ReferenceStatus, data_completeness: DataCompleten
     if status == "cautious":
         return "需要重点检查估值、波动、资金流出或盈利变化。"
     return "需要等待更明确的支撑因素或风险变化。"
+
+
+def build_ordinary_stock_summary(
+    stock: Stock,
+    factors: list[FactorScore],
+    alerts: list[AlertItem],
+    data_completeness: DataCompleteness,
+) -> tuple[str, list[str], list[str]]:
+    support_factors = [f"{factor.label}: {factor.description}" for factor in factors if factor.value >= 65][:3]
+    risk_factors = [alert.message for alert in alerts[:3]]
+
+    if data_completeness in ("insufficient", "incomplete"):
+        return (
+            "当前数据不足，暂不适合形成明确判断。建议补充数据后再分析。",
+            support_factors,
+            risk_factors or ["关键数据不完整，结论只能弱参考。"],
+        )
+
+    status = determine_reference_status(stock.score or 50, stock.signal or "neutral", data_completeness, alerts)
+    if status == "positive":
+        summary = "当前整体偏积极，适合加入重点观察，但不代表建议立即买入。"
+    elif status == "cautious":
+        summary = "当前风险项较多，建议谨慎关注，并先完成操作前检查。"
+    else:
+        summary = "当前整体偏中性，适合继续观察后续业绩、资金和价格趋势变化。"
+
+    if not support_factors:
+        support_factors = [build_primary_support(stock.score or 50, status)]
+    if not risk_factors:
+        risk_factors = [build_primary_risk(status, data_completeness)]
+
+    return summary, support_factors, risk_factors
 
 
 def stock_to_summary(
@@ -682,17 +720,31 @@ def get_stock_detail(db: Session, code: str, update_realtime: bool = True) -> St
         StrategyResult(**strategy)
         for strategy in calculate_strategies(history)
     ] + [db_strategy_to_model(strategy) for strategy in custom_strategies]
+    factor_models = [db_factor_to_model(f) for f in factors]
+    alert_models = [db_alert_to_model(a) for a in alerts]
+    data_completeness = determine_data_completeness(stock, history, factor_models)
+    ordinary_summary, support_factors, risk_factors = build_ordinary_stock_summary(
+        stock,
+        factor_models,
+        alert_models,
+        data_completeness,
+    )
 
     return StockDetail(
-        stock=stock_to_summary(stock),
-        factors=[db_factor_to_model(f) for f in factors],
+        stock=stock_to_summary(stock, history, factor_models, alert_models),
+        factors=factor_models,
         strategies=strategy_models,
-        alerts=[db_alert_to_model(a) for a in alerts],
+        alerts=alert_models,
         history=[db_price_to_model(h) for h in history],
         # 基于真实数据生成AI摘要
         ai_summary=ensure_ai_summary(db, stock, history, factors, alerts),
         data_status=stock.data_status,
         updated_at=stock.updated_at,
+        ordinary_summary=ordinary_summary,
+        support_factors=support_factors,
+        risk_factors=risk_factors,
+        data_completeness=data_completeness,
+        data_updated_at=stock.updated_at,
     )
 
 

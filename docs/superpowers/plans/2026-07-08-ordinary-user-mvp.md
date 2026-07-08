@@ -238,7 +238,7 @@ git commit -m "feat: add ordinary user reference fields"
 - 复用 `determine_data_completeness`、`determine_reference_status`、`reference_label`。
 - 新增 `build_ordinary_stock_summary(stock, factors, alerts, data_completeness) -> tuple[str, list[str], list[str]]`。
 
-- [ ] **步骤 1：添加失败的个股详情测试**
+- [x] **步骤 1：添加失败的个股详情测试**
 
 新增：
 
@@ -263,7 +263,7 @@ def test_stock_detail_returns_ordinary_summary_and_data_health(self):
     self.assertEqual(payload["disclaimer"], "仅供学习和分析参考，不构成投资建议。")
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 ```powershell
 python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTest::test_stock_detail_returns_ordinary_summary_and_data_health -q
@@ -271,7 +271,7 @@ python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWat
 
 预期：失败，因为响应中还没有普通用户摘要字段。
 
-- [ ] **步骤 3：扩展 `StockDetail`**
+- [x] **步骤 3：扩展 `StockDetail`**
 
 ```python
 class StockDetail(BaseModel):
@@ -342,7 +342,7 @@ return StockDetail(
 )
 ```
 
-- [ ] **步骤 4：再次运行测试**
+- [x] **步骤 4：再次运行测试**
 
 ```powershell
 python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTest::test_stock_detail_returns_ordinary_summary_and_data_health -q
@@ -350,7 +350,7 @@ python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWat
 
 预期：通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add backend/app/main.py backend/tests/test_user_admin_and_watchlist.py

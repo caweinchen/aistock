@@ -11,7 +11,7 @@ from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.database import Base, PricePointDB, Stock, User, WatchlistItem
+from app.database import Base, FactorScoreDB, PricePointDB, Stock, User, WatchlistItem
 from app.main import app, get_db
 from app.security import hash_password
 
@@ -157,6 +157,33 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
       self.assertIn("重点观察", item["primary_support"])
       self.assertEqual(item["data_completeness"], "mostly_complete")
       self.assertIsNotNone(item["data_updated_at"])
+
+    def test_stock_detail_returns_ordinary_summary_and_data_health(self):
+      self.db.add(Stock(code="601398", name="ICBC", price=6.12, change_percent=1.23, score=76, signal="buy"))
+      for index in range(30):
+          self.db.add(PricePointDB(
+              stock_code="601398",
+              date=f"2026-06-{index + 1:02d}",
+              open=6,
+              high=6.2,
+              low=5.9,
+              close=6 + index * 0.01,
+              volume=10000,
+          ))
+      self.db.add(FactorScoreDB(stock_code="601398", key="valuation", label="Valuation", value=68, description="估值处于合理区间。"))
+      self.db.add(FactorScoreDB(stock_code="601398", key="momentum", label="Momentum", value=74, description="价格趋势有所改善。"))
+      self.db.commit()
+
+      alice_token = self._login("alice", "Alice@123!")
+      response = self.client.get("/api/stocks/601398", headers={"Authorization": f"Bearer {alice_token}"})
+
+      self.assertEqual(response.status_code, 200, response.text)
+      payload = response.json()
+      self.assertIn("ordinary_summary", payload)
+      self.assertIn("data_completeness", payload)
+      self.assertIn("support_factors", payload)
+      self.assertIn("risk_factors", payload)
+      self.assertEqual(payload["disclaimer"], "仅供学习和分析参考，不构成投资建议。")
 
     def test_add_new_watchlist_stock_fetches_realtime_price(self):
       alice_token = self._login("alice", "Alice@123!")
