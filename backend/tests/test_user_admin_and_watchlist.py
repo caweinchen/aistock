@@ -133,6 +133,31 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
       self.assertEqual(alice_watchlist.json(), {"codes": ["600519"]})
       self.assertEqual(bob_watchlist.json(), {"codes": ["000001"]})
 
+    def test_stock_list_returns_ordinary_user_reference_fields(self):
+      self.db.add(Stock(
+          code="600519",
+          name="Kweichow Moutai",
+          price=1688.0,
+          change_percent=1.5,
+          score=82,
+          signal="buy",
+          data_status="normal",
+          updated_at=datetime(2026, 7, 8, 9, 30, tzinfo=timezone.utc),
+      ))
+      self.db.add(WatchlistItem(user_id=self.user_a.id, stock_code="600519", created_at=datetime.now(timezone.utc)))
+      self.db.commit()
+
+      alice_token = self._login("alice", "Alice@123!")
+      response = self.client.get("/api/stocks", headers={"Authorization": f"Bearer {alice_token}"})
+
+      self.assertEqual(response.status_code, 200, response.text)
+      item = response.json()[0]
+      self.assertEqual(item["reference_status"], "positive")
+      self.assertEqual(item["reference_label"], "偏积极")
+      self.assertIn("重点观察", item["primary_support"])
+      self.assertEqual(item["data_completeness"], "mostly_complete")
+      self.assertIsNotNone(item["data_updated_at"])
+
     def test_add_new_watchlist_stock_fetches_realtime_price(self):
       alice_token = self._login("alice", "Alice@123!")
 
