@@ -206,10 +206,10 @@ class StockDetail(BaseModel):
     ai_summary: str | None = None
     data_status: str
     updated_at: datetime | None = None
-    ordinary_summary: str
-    support_factors: list[str]
-    risk_factors: list[str]
-    data_completeness: DataCompleteness
+    ordinary_summary: str = ""
+    support_factors: list[str] = Field(default_factory=list)
+    risk_factors: list[str] = Field(default_factory=list)
+    data_completeness: DataCompleteness = "incomplete"
     data_updated_at: datetime | None = None
     disclaimer: str = "仅供学习和分析参考，不构成投资建议。"
 
