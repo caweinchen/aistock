@@ -185,6 +185,25 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
       self.assertIn("risk_factors", payload)
       self.assertEqual(payload["disclaimer"], "仅供学习和分析参考，不构成投资建议。")
 
+    def test_watchlist_insights_groups_user_stocks(self):
+      self.db.add_all([
+          Stock(code="601398", name="ICBC", price=6.12, change_percent=1.2, score=80, signal="buy", data_status="normal"),
+          Stock(code="000001", name="Ping An Bank", price=12.3, change_percent=-0.5, score=40, signal="sell", data_status="normal"),
+          WatchlistItem(user_id=self.user_a.id, stock_code="601398", created_at=datetime.now(timezone.utc)),
+          WatchlistItem(user_id=self.user_a.id, stock_code="000001", created_at=datetime.now(timezone.utc)),
+      ])
+      self.db.commit()
+
+      alice_token = self._login("alice", "Alice@123!")
+      response = self.client.get("/api/watchlist/insights", headers={"Authorization": f"Bearer {alice_token}"})
+
+      self.assertEqual(response.status_code, 200, response.text)
+      payload = response.json()
+      self.assertEqual(payload["total"], 2)
+      self.assertEqual(payload["disclaimer"], "仅供学习和分析参考，不构成投资建议。")
+      self.assertIn("positive", payload["groups"])
+      self.assertIn("cautious", payload["groups"])
+
     def test_add_new_watchlist_stock_fetches_realtime_price(self):
       alice_token = self._login("alice", "Alice@123!")
 

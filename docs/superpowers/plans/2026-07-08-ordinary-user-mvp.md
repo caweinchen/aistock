@@ -370,7 +370,7 @@ git commit -m "feat: add ordinary stock detail summary"
 - 响应模型：`WatchlistInsights`。
 - 分组键：`positive`、`watch`、`cautious`、`insufficient_data`。
 
-- [ ] **步骤 1：添加失败的接口测试**
+- [x] **步骤 1：添加失败的接口测试**
 
 新增：
 
@@ -395,7 +395,7 @@ def test_watchlist_insights_groups_user_stocks(self):
     self.assertIn("cautious", payload["groups"])
 ```
 
-- [ ] **步骤 2：运行测试并确认失败**
+- [x] **步骤 2：运行测试并确认失败**
 
 ```powershell
 python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTest::test_watchlist_insights_groups_user_stocks -q
@@ -403,7 +403,7 @@ python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWat
 
 预期：失败，接口返回 404。
 
-- [ ] **步骤 3：新增响应模型和路由**
+- [x] **步骤 3：新增响应模型和路由**
 
 在 `backend/app/main.py` 中新增：
 
@@ -452,7 +452,7 @@ def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(g
     )
 ```
 
-- [ ] **步骤 4：再次运行测试**
+- [x] **步骤 4：再次运行测试**
 
 ```powershell
 python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTest::test_watchlist_insights_groups_user_stocks -q
@@ -460,7 +460,7 @@ python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWat
 
 预期：通过。
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```powershell
 git add backend/app/main.py backend/tests/test_user_admin_and_watchlist.py

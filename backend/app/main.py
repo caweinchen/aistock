@@ -214,6 +214,14 @@ class StockDetail(BaseModel):
     disclaimer: str = "仅供学习和分析参考，不构成投资建议。"
 
 
+class WatchlistInsights(BaseModel):
+    total: int
+    groups: dict[ReferenceStatus, list[StockSummary]]
+    risk_overview: str
+    data_updated_at: datetime | None = None
+    disclaimer: str = "仅供学习和分析参考，不构成投资建议。"
+
+
 app = FastAPI(
     title="AIStock API",
     version="0.1.0",
@@ -1412,6 +1420,42 @@ def get_watchlist(db: Session = Depends(get_db), user: User = Depends(get_curren
     except Exception as e:
         logger.error(f"Failed to load watchlist for user [{user.username}]: {e}")
         raise HTTPException(status_code=500, detail="Failed to load watchlist")
+
+
+@app.get("/api/watchlist/insights", response_model=WatchlistInsights)
+def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    watchlist_items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).all()
+    codes = [item.stock_code for item in watchlist_items]
+    stocks = db.query(Stock).filter(Stock.code.in_(codes)).all() if codes else []
+    groups: dict[ReferenceStatus, list[StockSummary]] = {
+        "positive": [],
+        "watch": [],
+        "cautious": [],
+        "insufficient_data": [],
+    }
+    latest_updated_at = None
+
+    for stock in stocks:
+        summary = stock_to_summary(stock)
+        groups[summary.reference_status].append(summary)
+        if stock.updated_at and (latest_updated_at is None or stock.updated_at > latest_updated_at):
+            latest_updated_at = stock.updated_at
+
+    cautious_count = len(groups["cautious"])
+    insufficient_count = len(groups["insufficient_data"])
+    if cautious_count:
+        risk_overview = f"当前自选股中有 {cautious_count} 只需要谨慎关注。"
+    elif insufficient_count:
+        risk_overview = f"当前自选股中有 {insufficient_count} 只数据不足，建议先补充数据。"
+    else:
+        risk_overview = "当前自选股未发现集中高风险提示，仍需结合仓位和估值检查。"
+
+    return WatchlistInsights(
+        total=len(stocks),
+        groups=groups,
+        risk_overview=risk_overview,
+        data_updated_at=latest_updated_at,
+    )
 
 
 @app.post("/api/watchlist/{code}")
