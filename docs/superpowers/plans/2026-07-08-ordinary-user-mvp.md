@@ -758,7 +758,7 @@ python -m pytest backend/tests -q
 
 预期：通过。
 
-- [ ] **步骤 2：运行前端测试**
+- [x] **步骤 2：运行前端测试**
 
 ```powershell
 cd frontend
@@ -767,7 +767,7 @@ npm test -- --run
 
 预期：通过。
 
-- [ ] **步骤 3：运行 TypeScript 检查**
+- [x] **步骤 3：运行 TypeScript 检查**
 
 ```powershell
 cd frontend
