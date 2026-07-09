@@ -108,3 +108,105 @@ def build_data_health(stock, history=None, factors=None, alerts=None, holders=No
         downgrade_reasons=list(dict.fromkeys(downgrade_reasons)),
         user_message=user_message,
     )
+
+
+def _factor_value(factors, key: str) -> int | None:
+    for factor in factors or []:
+        if getattr(factor, "key", "") == key:
+            return getattr(factor, "value", None)
+    return None
+
+
+def _factor_description(factors, key: str) -> str | None:
+    for factor in factors or []:
+        if getattr(factor, "key", "") == key:
+            return getattr(factor, "description", None)
+    return None
+
+
+def build_risk_explanations(stock, factors=None, alerts=None, holders=None, dividends=None, data_health=None) -> list[RiskExplanationResult]:
+    risks: list[RiskExplanationResult] = []
+    factors = factors or []
+    alerts = alerts or []
+    holders = holders or []
+    dividends = dividends or []
+
+    valuation = _factor_value(factors, "valuation")
+    if valuation is not None and valuation < 45:
+        risks.append(RiskExplanationResult(
+            type="valuation",
+            level="high" if valuation < 35 else "medium",
+            title="估值风险",
+            what_it_means="当前估值指标偏弱，价格可能已经反映较多乐观预期。",
+            why_it_matters="如果后续业绩增长跟不上，股价可能承压。",
+            evidence=[_factor_description(factors, "valuation") or f"估值因子为 {valuation} 分"],
+        ))
+
+    volatility = _factor_value(factors, "volatility")
+    if volatility is not None and volatility < 45:
+        risks.append(RiskExplanationResult(
+            type="volatility",
+            level="high" if volatility < 35 else "medium",
+            title="波动风险",
+            what_it_means="近期价格波动偏高，短期回撤可能超出普通用户预期。",
+            why_it_matters="波动较大时，用户更容易因短期涨跌做出情绪化决策。",
+            evidence=[_factor_description(factors, "volatility") or f"波动因子为 {volatility} 分"],
+        ))
+
+    profitability = _factor_value(factors, "profitability")
+    if profitability is not None and profitability < 45:
+        risks.append(RiskExplanationResult(
+            type="fundamentals",
+            level="medium",
+            title="业绩质量风险",
+            what_it_means="盈利质量或基本面因子偏弱。",
+            why_it_matters="基本面偏弱时，价格上涨更依赖情绪或短期资金推动。",
+            evidence=[_factor_description(factors, "profitability") or f"盈利因子为 {profitability} 分"],
+        ))
+
+    negative_holder_changes = [
+        holder for holder in holders
+        if getattr(holder, "change_amount", 0) is not None and getattr(holder, "change_amount", 0) < 0
+    ]
+    if negative_holder_changes:
+        risks.append(RiskExplanationResult(
+            type="holder_change",
+            level="medium",
+            title="重要股东变动风险",
+            what_it_means="重要持有人出现减持迹象。",
+            why_it_matters="连续或明显减持可能带来筹码压力，需要结合公告和价格表现继续观察。",
+            evidence=[f"发现 {len(negative_holder_changes)} 条重要股东减持记录"],
+        ))
+
+    if not dividends:
+        risks.append(RiskExplanationResult(
+            type="dividend",
+            level="low",
+            title="分红稳定性信息不足",
+            what_it_means="当前缺少可用于判断分红稳定性的记录。",
+            why_it_matters="分红记录不足时，不能把长期持有回报作为强支撑因素。",
+            evidence=["未读取到分红记录"],
+        ))
+
+    high_alerts = [alert for alert in alerts if getattr(alert, "level", "") == "high"]
+    for alert in high_alerts[:2]:
+        risks.append(RiskExplanationResult(
+            type="fundamentals",
+            level="high",
+            title=getattr(alert, "title", "高风险提示"),
+            what_it_means=getattr(alert, "message", "系统发现高风险提示。"),
+            why_it_matters="高风险提示可能影响普通用户的风险承受判断。",
+            evidence=[getattr(alert, "message", "高风险提示")],
+        ))
+
+    if data_health and data_health.completeness in ("insufficient", "incomplete"):
+        risks.insert(0, RiskExplanationResult(
+            type="data_quality",
+            level="high" if data_health.completeness == "insufficient" else "medium",
+            title="数据不足风险",
+            what_it_means=data_health.user_message,
+            why_it_matters="数据不足时，系统不应形成过强结论，用户需要先补充或刷新数据。",
+            evidence=data_health.missing_items or data_health.downgrade_reasons,
+        ))
+
+    return risks[:6]
