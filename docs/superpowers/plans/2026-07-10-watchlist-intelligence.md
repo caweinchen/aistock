@@ -964,7 +964,7 @@ git commit -m "feat: show watchlist intelligence on home"
 - Verifies: all backend and frontend work from Tasks 1-4
 - Produces: updated roadmap status for phase 2 first slice
 
-- [ ] **Step 1: Run backend tests**
+- [x] **Step 1: Run backend tests**
 
 Run:
 
@@ -974,7 +974,7 @@ python -m pytest backend/tests -q
 
 Expected: all backend tests pass.
 
-- [ ] **Step 2: Run frontend tests**
+- [x] **Step 2: Run frontend tests**
 
 Run:
 
@@ -985,7 +985,7 @@ npm test -- --run
 
 Expected: all frontend tests pass.
 
-- [ ] **Step 3: Run TypeScript**
+- [x] **Step 3: Run TypeScript**
 
 Run:
 
@@ -996,7 +996,7 @@ npx tsc --noEmit
 
 Expected: TypeScript passes.
 
-- [ ] **Step 4: Scan forbidden copy**
+- [x] **Step 4: Scan forbidden copy**
 
 Run:
 
@@ -1006,7 +1006,7 @@ rg -n "立即买入|强烈卖出|必涨|稳赚|最佳买点|今日牛股|必买�
 
 Expected: no user-facing implementation copy contains these phrases.
 
-- [ ] **Step 5: Run API smoke**
+- [x] **Step 5: Run API smoke**
 
 Start backend if it is not running:
 
@@ -1032,7 +1032,7 @@ Expected:
 - `intelligence.insights` exists.
 - Existing `groups` and `data_health_overview` still exist.
 
-- [ ] **Step 6: Run web smoke**
+- [x] **Step 6: Run web smoke**
 
 Start web if it is not running:
 
@@ -1056,7 +1056,7 @@ Expected:
 - Today observations appear when `intelligence.observations` is present.
 - Clicking a stock still opens the existing stock detail page.
 
-- [ ] **Step 7: Update roadmap**
+- [x] **Step 7: Update roadmap**
 
 In `docs/PRODUCT_COMMERCIALIZATION_ROADMAP.md`, update phase 2 status to show the first slice is in progress or partially complete. Use the existing encoding/style of the file and avoid rewriting unrelated sections. The semantic target is:
 
@@ -1070,7 +1070,7 @@ In the phase 2 section heading, preserve TODO if 2C/2D are not complete, but add
 ## 5. 第 2 阶段：自选股智能参考增强（TODO，2A/2B 已完成）
 ```
 
-- [ ] **Step 8: Commit verification and roadmap**
+- [x] **Step 8: Commit verification and roadmap**
 
 ```powershell
 git add docs/PRODUCT_COMMERCIALIZATION_ROADMAP.md docs/superpowers/plans/2026-07-10-watchlist-intelligence.md
