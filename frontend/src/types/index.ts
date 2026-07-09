@@ -5,6 +5,9 @@ export type RiskLevel = 'low' | 'medium' | 'high';
 export type RiskType = 'valuation' | 'volatility' | 'fundamentals' | 'holder_change' | 'dividend' | 'data_quality';
 export type ChecklistMode = 'buy' | 'sell';
 export type ChecklistStatus = 'pass' | 'attention' | 'user_confirm' | 'insufficient_data';
+export type WatchlistFocusLevel = 'priority' | 'watch' | 'cautious' | 'insufficient_data';
+export type WatchlistSortMode = 'overall' | 'risk' | 'data_health' | 'recent_change';
+export type ObservationType = 'priority' | 'risk' | 'data_quality' | 'refresh' | 'balanced';
 export type StrategyTemplate = 'trend-breakout' | 'low-valuation-reversal' | 'dividend-defense';
 
 export interface StockSummary {
@@ -131,6 +134,44 @@ export interface WatchlistDataHealthOverview {
   message: string;
 }
 
+export interface WatchlistStockInsight {
+  code: string;
+  name: string;
+  focus_level: WatchlistFocusLevel;
+  focus_label: string;
+  focus_reason: string;
+  support_points: string[];
+  risk_points: string[];
+  data_completeness: DataCompleteness;
+  score?: number | null;
+  risk_score: number;
+  priority_score: number;
+  updated_at?: string | null;
+}
+
+export interface WatchlistRadar {
+  title: string;
+  summary: string;
+  priority_count: number;
+  cautious_count: number;
+  insufficient_count: number;
+  average_score?: number | null;
+}
+
+export interface WatchlistObservation {
+  type: ObservationType;
+  title: string;
+  description: string;
+  stock_codes: string[];
+}
+
+export interface WatchlistIntelligence {
+  radar: WatchlistRadar;
+  observations: WatchlistObservation[];
+  insights: WatchlistStockInsight[];
+  sort_modes: WatchlistSortMode[];
+}
+
 export interface WatchlistInsights {
   total: number;
   groups: Record<ReferenceStatus, StockSummary[]>;
@@ -138,6 +179,7 @@ export interface WatchlistInsights {
   data_updated_at?: string | null;
   disclaimer: string;
   data_health_overview?: WatchlistDataHealthOverview | null;
+  intelligence?: WatchlistIntelligence | null;
 }
 
 export interface ResearchSnapshot {

@@ -641,7 +641,7 @@ git commit -m "feat: expose watchlist intelligence insights"
 - Consumes: backend `WatchlistInsights.intelligence`
 - Produces: frontend `WatchlistIntelligence` types
 
-- [ ] **Step 1: Read Expo 56 docs before frontend changes**
+- [x] **Step 1: Read Expo 56 docs before frontend changes**
 
 Open:
 
@@ -651,7 +651,7 @@ https://docs.expo.dev/versions/v56.0.0/
 
 Confirm this task only changes TypeScript types and Vitest API tests; no Expo runtime API changes are needed.
 
-- [ ] **Step 2: Extend frontend types**
+- [x] **Step 2: Extend frontend types**
 
 In `frontend/src/types/index.ts`, add near the existing watchlist types:
 
@@ -713,7 +713,7 @@ export interface WatchlistInsights {
 }
 ```
 
-- [ ] **Step 3: Extend API test fixture**
+- [x] **Step 3: Extend API test fixture**
 
 In `frontend/src/services/api.test.ts`, add `intelligence` to the `watchlistInsights` fixture:
 
@@ -763,7 +763,7 @@ expect(result.intelligence?.observations[0]?.type).toBe('priority');
 expect(result.intelligence?.insights[0]?.focus_level).toBe('priority');
 ```
 
-- [ ] **Step 4: Run frontend API tests**
+- [x] **Step 4: Run frontend API tests**
 
 Run:
 
@@ -774,7 +774,7 @@ npm test -- --run src/services/api.test.ts
 
 Expected: API tests pass.
 
-- [ ] **Step 5: Run TypeScript**
+- [x] **Step 5: Run TypeScript**
 
 Run:
 
@@ -785,7 +785,7 @@ npx tsc --noEmit
 
 Expected: TypeScript passes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add frontend/src/types/index.ts frontend/src/services/api.test.ts docs/superpowers/plans/2026-07-10-watchlist-intelligence.md

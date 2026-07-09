@@ -62,6 +62,41 @@ const watchlistInsights: WatchlistInsights = {
     latest_updated_at: '2026-07-09T10:00:00',
     message: '当前自选股数据健康状况可用于基础参考。',
   },
+  intelligence: {
+    radar: {
+      title: '自选股机会雷达',
+      summary: '今日自选股中有 1 只可重点观察，仍需结合详情页依据。',
+      priority_count: 1,
+      cautious_count: 0,
+      insufficient_count: 0,
+      average_score: 80,
+    },
+    observations: [
+      {
+        type: 'priority',
+        title: '优先复查重点观察股',
+        description: '这些自选股的支撑因素相对更集中，建议先查看详情页确认依据。',
+        stock_codes: ['600519'],
+      },
+    ],
+    insights: [
+      {
+        code: '600519',
+        name: '贵州茅台',
+        focus_level: 'priority',
+        focus_label: '重点观察',
+        focus_reason: '支撑因素相对更集中，可优先查看详情页确认依据。',
+        support_points: ['评分较高'],
+        risk_points: [],
+        data_completeness: 'complete',
+        score: 80,
+        risk_score: 0,
+        priority_score: 45,
+        updated_at: '2026-07-09T10:00:00',
+      },
+    ],
+    sort_modes: ['overall', 'risk', 'data_health', 'recent_change'],
+  },
 };
 
 const dividend: DividendRecord[] = [{
@@ -224,6 +259,9 @@ describe('api cache policy', () => {
     const result = await getWatchlistInsights();
     expect(result).toEqual(watchlistInsights);
     expect(result.data_health_overview?.message).toBe('当前自选股数据健康状况可用于基础参考。');
+    expect(result.intelligence?.radar.title).toBe('自选股机会雷达');
+    expect(result.intelligence?.observations[0]?.type).toBe('priority');
+    expect(result.intelligence?.insights[0]?.focus_level).toBe('priority');
     expect(fetchSpy).toHaveBeenCalledWith(
       'http://server.test/api/watchlist/insights',
       { headers: { Authorization: 'Bearer token' } },
