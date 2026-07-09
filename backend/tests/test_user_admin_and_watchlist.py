@@ -267,6 +267,29 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
       self.assertGreaterEqual(overview["insufficient_count"], 1)
       self.assertIn("数据", overview["message"])
 
+    def test_watchlist_insights_returns_intelligence(self):
+      self.db.add_all([
+          Stock(code="600101", name="重点样本", price=10.0, change_percent=1.2, score=82, signal="buy", data_status="normal", updated_at=datetime(2026, 7, 10, 10, 0, tzinfo=timezone.utc)),
+          Stock(code="600102", name="谨慎样本", price=8.0, change_percent=-2.1, score=38, signal="sell", data_status="normal", updated_at=datetime(2026, 7, 10, 9, 0, tzinfo=timezone.utc)),
+          WatchlistItem(user_id=self.user_a.id, stock_code="600101", created_at=datetime.now(timezone.utc)),
+          WatchlistItem(user_id=self.user_a.id, stock_code="600102", created_at=datetime.now(timezone.utc)),
+      ])
+      self.db.commit()
+
+      alice_token = self._login("alice", "Alice@123!")
+      response = self.client.get("/api/watchlist/insights", headers={"Authorization": f"Bearer {alice_token}"})
+
+      self.assertEqual(response.status_code, 200, response.text)
+      payload = response.json()
+      self.assertIn("intelligence", payload)
+      intelligence = payload["intelligence"]
+      self.assertIn("radar", intelligence)
+      self.assertIn("observations", intelligence)
+      self.assertIn("insights", intelligence)
+      self.assertGreaterEqual(len(intelligence["insights"]), 2)
+      self.assertIn("观察", intelligence["radar"]["summary"])
+      self.assertTrue(any(item["focus_level"] in ["priority", "cautious", "watch", "insufficient_data"] for item in intelligence["insights"]))
+
     def test_add_new_watchlist_stock_fetches_realtime_price(self):
       alice_token = self._login("alice", "Alice@123!")
 

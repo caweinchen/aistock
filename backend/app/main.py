@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import Literal
 import logging
+from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Depends
@@ -42,11 +43,15 @@ from app.ordinary_user import (
     build_pre_trade_checklist,
     build_risk_explanations,
 )
+from app.watchlist_intelligence import build_watchlist_intelligence
 
 Signal = Literal["neutral", "buy", "sell"]
 ReferenceStatus = Literal["positive", "watch", "cautious", "insufficient_data"]
 DataCompleteness = Literal["complete", "mostly_complete", "incomplete", "insufficient"]
 RiskLevel = Literal["low", "medium", "high"]
+WatchlistFocusLevel = Literal["priority", "watch", "cautious", "insufficient_data"]
+WatchlistSortMode = Literal["overall", "risk", "data_health", "recent_change"]
+ObservationType = Literal["priority", "risk", "data_quality", "refresh", "balanced"]
 TradeAction = Literal["buy", "sell"]
 StrategyTemplate = Literal["trend-breakout", "low-valuation-reversal", "dividend-defense"]
 
@@ -246,6 +251,44 @@ class WatchlistDataHealthOverview(BaseModel):
     message: str = "当前自选股数据健康状况可用于基础参考。"
 
 
+class WatchlistStockInsight(BaseModel):
+    code: str
+    name: str
+    focus_level: WatchlistFocusLevel
+    focus_label: str
+    focus_reason: str
+    support_points: list[str] = Field(default_factory=list)
+    risk_points: list[str] = Field(default_factory=list)
+    data_completeness: DataCompleteness = "incomplete"
+    score: int | None = None
+    risk_score: int = 0
+    priority_score: int = 0
+    updated_at: datetime | None = None
+
+
+class WatchlistRadar(BaseModel):
+    title: str = "自选股机会雷达"
+    summary: str = "当前自选股适合继续观察。"
+    priority_count: int = 0
+    cautious_count: int = 0
+    insufficient_count: int = 0
+    average_score: float | None = None
+
+
+class WatchlistObservation(BaseModel):
+    type: ObservationType
+    title: str
+    description: str
+    stock_codes: list[str] = Field(default_factory=list)
+
+
+class WatchlistIntelligence(BaseModel):
+    radar: WatchlistRadar
+    observations: list[WatchlistObservation] = Field(default_factory=list)
+    insights: list[WatchlistStockInsight] = Field(default_factory=list)
+    sort_modes: list[WatchlistSortMode] = Field(default_factory=lambda: ["overall", "risk", "data_health", "recent_change"])
+
+
 class StockDetail(BaseModel):
     stock: StockSummary
     factors: list[FactorScore]
@@ -274,6 +317,7 @@ class WatchlistInsights(BaseModel):
     data_updated_at: datetime | None = None
     disclaimer: str = "仅供学习和分析参考，不构成投资建议。"
     data_health_overview: WatchlistDataHealthOverview | None = None
+    intelligence: WatchlistIntelligence | None = None
 
 
 app = FastAPI(
@@ -448,6 +492,15 @@ def checklist_to_model(result) -> PreTradeChecklist:
         title=result.title,
         completion_hint=result.completion_hint,
         items=[ChecklistItem(**item.__dict__) for item in result.items],
+    )
+
+
+def watchlist_intelligence_to_model(result) -> WatchlistIntelligence:
+    return WatchlistIntelligence(
+        radar=WatchlistRadar(**result.radar.__dict__),
+        observations=[WatchlistObservation(**item.__dict__) for item in result.observations],
+        insights=[WatchlistStockInsight(**item.__dict__) for item in result.insights],
+        sort_modes=result.sort_modes,
     )
 
 
@@ -1515,35 +1568,45 @@ def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(g
         "insufficient_data": [],
     }
     latest_updated_at = None
-    insufficient_count = 0
-    incomplete_count = 0
+    data_insufficient_count = 0
+    data_incomplete_count = 0
+    stock_contexts = []
 
     for stock in stocks:
         summary = stock_to_summary(stock)
         data_health_result = build_data_health(stock)
         if data_health_result.completeness == "insufficient":
-            insufficient_count += 1
+            data_insufficient_count += 1
         if data_health_result.completeness == "incomplete":
-            incomplete_count += 1
+            data_incomplete_count += 1
+        stock_contexts.append(SimpleNamespace(
+            stock=stock,
+            summary=summary,
+            data_health=data_health_result,
+            support_factors=[summary.primary_support],
+            risk_factors=[summary.primary_risk],
+        ))
         groups[summary.reference_status].append(summary)
         if stock.updated_at and (latest_updated_at is None or stock.updated_at > latest_updated_at):
             latest_updated_at = stock.updated_at
 
     cautious_count = len(groups["cautious"])
-    insufficient_count = len(groups["insufficient_data"])
+    group_insufficient_count = len(groups["insufficient_data"])
     if cautious_count:
         risk_overview = f"当前自选股中有 {cautious_count} 只需要谨慎关注。"
-    elif insufficient_count:
-        risk_overview = f"当前自选股中有 {insufficient_count} 只数据不足，建议先补充数据。"
+    elif group_insufficient_count:
+        risk_overview = f"当前自选股中有 {group_insufficient_count} 只数据不足，建议先补充数据。"
     else:
         risk_overview = "当前自选股未发现集中高风险提示，仍需结合仓位和估值检查。"
 
-    if insufficient_count:
-        health_message = f"当前自选股中有 {insufficient_count} 只数据不足，相关结论已降级。"
-    elif incomplete_count:
-        health_message = f"当前自选股中有 {incomplete_count} 只数据不完整，建议结合详情页继续查看。"
+    if data_insufficient_count:
+        health_message = f"当前自选股中有 {data_insufficient_count} 只数据不足，相关结论已降级。"
+    elif data_incomplete_count:
+        health_message = f"当前自选股中有 {data_incomplete_count} 只数据不完整，建议结合详情页继续查看。"
     else:
         health_message = "当前自选股数据健康状况可用于基础参考。"
+
+    intelligence_result = build_watchlist_intelligence(stock_contexts)
 
     return WatchlistInsights(
         total=len(stocks),
@@ -1552,11 +1615,12 @@ def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(g
         data_updated_at=latest_updated_at,
         data_health_overview=WatchlistDataHealthOverview(
             total=len(stocks),
-            insufficient_count=insufficient_count,
-            incomplete_count=incomplete_count,
+            insufficient_count=data_insufficient_count,
+            incomplete_count=data_incomplete_count,
             latest_updated_at=latest_updated_at,
             message=health_message,
         ),
+        intelligence=watchlist_intelligence_to_model(intelligence_result),
     )
 
 

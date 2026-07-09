@@ -394,7 +394,7 @@ git commit -m "feat: add watchlist intelligence rules"
 - Consumes: `build_watchlist_intelligence(stock_contexts) -> WatchlistIntelligenceResult`
 - Produces: `WatchlistInsights.intelligence: WatchlistIntelligence | None`
 
-- [ ] **Step 1: Add failing API tests**
+- [x] **Step 1: Add failing API tests**
 
 Append this test method to `UserAdminAndWatchlistTest` in `backend/tests/test_user_admin_and_watchlist.py`:
 
@@ -434,17 +434,17 @@ Update `test_watchlist_insights_returns_data_health_overview` to guard the corre
 
 If the file currently contains mojibake string literals for `"数据"`, keep the existing local literal style used in that file.
 
-- [ ] **Step 2: Run failing API test**
+- [x] **Step 2: Run failing API test**
 
 Run:
 
 ```powershell
-python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTest::test_watchlist_insights_returns_intelligence -q
+python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTests::test_watchlist_insights_returns_intelligence -q
 ```
 
 Expected: fails because `intelligence` is not present.
 
-- [ ] **Step 3: Add backend imports and models**
+- [x] **Step 3: Add backend imports and models**
 
 In `backend/app/main.py`, extend the existing ordinary-user import block:
 
@@ -515,7 +515,7 @@ class WatchlistInsights(BaseModel):
 
 If the current file uses mojibake string literals for the disclaimer, keep the existing literal unchanged and add only `intelligence`.
 
-- [ ] **Step 4: Add converters**
+- [x] **Step 4: Add converters**
 
 Add these helpers near the existing ordinary-user converters:
 
@@ -529,7 +529,7 @@ def watchlist_intelligence_to_model(result) -> WatchlistIntelligence:
     )
 ```
 
-- [ ] **Step 5: Integrate in `get_watchlist_insights`**
+- [x] **Step 5: Integrate in `get_watchlist_insights`**
 
 Inside `get_watchlist_insights`, replace the single `insufficient_count` variable with explicit counters and collect contexts:
 
@@ -602,17 +602,17 @@ Use the corrected data-health overview:
         ),
 ```
 
-- [ ] **Step 6: Run API tests**
+- [x] **Step 6: Run API tests**
 
 Run:
 
 ```powershell
-python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTest::test_watchlist_insights_returns_intelligence backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTest::test_watchlist_insights_returns_data_health_overview -q
+python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTests::test_watchlist_insights_returns_intelligence backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTests::test_watchlist_insights_returns_data_health_overview -q
 ```
 
 Expected: 2 passed.
 
-- [ ] **Step 7: Run backend regression**
+- [x] **Step 7: Run backend regression**
 
 Run:
 
@@ -622,7 +622,7 @@ python -m pytest backend/tests -q
 
 Expected: all backend tests pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add backend/app/main.py backend/tests/test_user_admin_and_watchlist.py docs/superpowers/plans/2026-07-10-watchlist-intelligence.md
