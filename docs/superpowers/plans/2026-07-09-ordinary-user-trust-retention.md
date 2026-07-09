@@ -239,7 +239,7 @@ export interface WatchlistInsights {
 - Produces: `DataHealthResult`, `build_data_health(stock, history=None, factors=None, alerts=None, holders=None, dividends=None) -> DataHealthResult`
 - Consumed by: Task 2, Task 3, Task 4
 
-- [ ] **Step 1: Add failing data health tests**
+- [x] **Step 1: Add failing data health tests**
 
 Create `backend/tests/test_ordinary_user.py`:
 
@@ -287,7 +287,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run the failing tests**
+- [x] **Step 2: Run the failing tests**
 
 Run:
 
@@ -297,7 +297,7 @@ python -m pytest backend/tests/test_ordinary_user.py -q
 
 Expected: fails because `backend.app.ordinary_user` does not exist.
 
-- [ ] **Step 3: Implement data health module**
+- [x] **Step 3: Implement data health module**
 
 Create `backend/app/ordinary_user.py`:
 
@@ -417,7 +417,7 @@ def build_data_health(stock, history=None, factors=None, alerts=None, holders=No
     )
 ```
 
-- [ ] **Step 4: Run data health tests**
+- [x] **Step 4: Run data health tests**
 
 Run:
 
@@ -427,7 +427,7 @@ python -m pytest backend/tests/test_ordinary_user.py -q
 
 Expected: 2 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add backend/app/ordinary_user.py backend/tests/test_ordinary_user.py
@@ -447,7 +447,7 @@ git commit -m "feat: add ordinary user data health rules"
 - Produces: `build_risk_explanations(stock, factors=None, alerts=None, holders=None, dividends=None, data_health=None) -> list[RiskExplanationResult]`
 - Consumed by: Task 3, Task 4
 
-- [ ] **Step 1: Add failing risk explanation tests**
+- [x] **Step 1: Add failing risk explanation tests**
 
 Append to `OrdinaryUserDataHealthTests` in `backend/tests/test_ordinary_user.py`:
 
@@ -481,7 +481,7 @@ Append to `OrdinaryUserDataHealthTests` in `backend/tests/test_ordinary_user.py`
         self.assertTrue(any("数据不足" in risk.title for risk in risks))
 ```
 
-- [ ] **Step 2: Run the failing tests**
+- [x] **Step 2: Run the failing tests**
 
 Run:
 
@@ -491,7 +491,7 @@ python -m pytest backend/tests/test_ordinary_user.py -q
 
 Expected: fails because `build_risk_explanations` is missing.
 
-- [ ] **Step 3: Implement risk explanation rules**
+- [x] **Step 3: Implement risk explanation rules**
 
 Append to `backend/app/ordinary_user.py`:
 
@@ -598,7 +598,7 @@ def build_risk_explanations(stock, factors=None, alerts=None, holders=None, divi
     return risks[:6]
 ```
 
-- [ ] **Step 4: Run risk explanation tests**
+- [x] **Step 4: Run risk explanation tests**
 
 Run:
 
@@ -608,7 +608,7 @@ python -m pytest backend/tests/test_ordinary_user.py -q
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add backend/app/ordinary_user.py backend/tests/test_ordinary_user.py
@@ -628,7 +628,7 @@ git commit -m "feat: add ordinary user risk explanations"
 - Produces: `build_pre_trade_checklist(stock, risk_explanations, data_health, mode: ChecklistMode) -> PreTradeChecklistResult`
 - Consumed by: Task 4
 
-- [ ] **Step 1: Add failing checklist tests**
+- [x] **Step 1: Add failing checklist tests**
 
 Append to `OrdinaryUserDataHealthTests`:
 
@@ -660,7 +660,7 @@ Append to `OrdinaryUserDataHealthTests`:
         self.assertTrue(any(item.key == "avoid_panic" for item in checklist.items))
 ```
 
-- [ ] **Step 2: Run failing checklist tests**
+- [x] **Step 2: Run failing checklist tests**
 
 Run:
 
@@ -670,7 +670,7 @@ python -m pytest backend/tests/test_ordinary_user.py -q
 
 Expected: fails because `build_pre_trade_checklist` is missing.
 
-- [ ] **Step 3: Implement checklist rules**
+- [x] **Step 3: Implement checklist rules**
 
 Append to `backend/app/ordinary_user.py`:
 
@@ -771,7 +771,7 @@ def build_pre_trade_checklist(stock, risk_explanations, data_health, mode: Check
     )
 ```
 
-- [ ] **Step 4: Run checklist tests**
+- [x] **Step 4: Run checklist tests**
 
 Run:
 
@@ -781,7 +781,7 @@ python -m pytest backend/tests/test_ordinary_user.py -q
 
 Expected: all tests pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add backend/app/ordinary_user.py backend/tests/test_ordinary_user.py
@@ -800,7 +800,7 @@ git commit -m "feat: add ordinary user pre-trade checklists"
 - Consumes: `build_data_health`, `build_risk_explanations`, `build_pre_trade_checklist`
 - Produces: `StockDetail.data_health`, `StockDetail.risk_explanations`, `StockDetail.buy_checklist`, `StockDetail.sell_checklist`, `WatchlistInsights.data_health_overview`
 
-- [ ] **Step 1: Add failing API tests**
+- [x] **Step 1: Add failing API tests**
 
 In `backend/tests/test_user_admin_and_watchlist.py`, add:
 
@@ -843,7 +843,7 @@ In `backend/tests/test_user_admin_and_watchlist.py`, add:
         self.assertIn("数据", overview["message"])
 ```
 
-- [ ] **Step 2: Run failing API tests**
+- [x] **Step 2: Run failing API tests**
 
 Run:
 
@@ -853,7 +853,7 @@ python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWat
 
 Expected: fails because new API fields are absent.
 
-- [ ] **Step 3: Add Pydantic models and converters**
+- [x] **Step 3: Add Pydantic models and converters**
 
 In `backend/app/main.py`, import:
 
@@ -934,7 +934,7 @@ def checklist_to_model(result) -> PreTradeChecklist:
     )
 ```
 
-- [ ] **Step 4: Integrate into stock detail**
+- [x] **Step 4: Integrate into stock detail**
 
 In `get_stock_detail`, after `alert_models`:
 
@@ -956,7 +956,7 @@ In `StockDetail(...)`, add:
         sell_checklist=checklist_to_model(sell_checklist_result),
 ```
 
-- [ ] **Step 5: Integrate into watchlist insights**
+- [x] **Step 5: Integrate into watchlist insights**
 
 In `get_watchlist_insights`, before the stock loop:
 
@@ -998,7 +998,7 @@ Add to `WatchlistInsights(...)`:
         ),
 ```
 
-- [ ] **Step 6: Run API tests**
+- [x] **Step 6: Run API tests**
 
 Run:
 
@@ -1008,7 +1008,7 @@ python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWat
 
 Expected: both pass.
 
-- [ ] **Step 7: Run backend regression**
+- [x] **Step 7: Run backend regression**
 
 Run:
 
@@ -1018,7 +1018,7 @@ python -m pytest backend/tests -q
 
 Expected: all backend tests pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add backend/app/main.py backend/tests/test_user_admin_and_watchlist.py
@@ -1037,7 +1037,7 @@ git commit -m "feat: expose ordinary user trust signals"
 - Consumes: backend `data_health`, `risk_explanations`, `buy_checklist`, `sell_checklist`, `data_health_overview`
 - Produces: TypeScript types for UI tasks
 
-- [ ] **Step 1: Read Expo 56 docs before frontend changes**
+- [x] **Step 1: Read Expo 56 docs before frontend changes**
 
 Open:
 
@@ -1047,7 +1047,7 @@ https://docs.expo.dev/versions/v56.0.0/
 
 Confirm this task only changes TypeScript types and tests; no Expo runtime API changes are needed.
 
-- [ ] **Step 2: Extend frontend types**
+- [x] **Step 2: Extend frontend types**
 
 In `frontend/src/types/index.ts`, add the target frontend interfaces from the Target Frontend Interfaces section.
 
@@ -1066,7 +1066,7 @@ and:
   data_health_overview?: WatchlistDataHealthOverview | null;
 ```
 
-- [ ] **Step 3: Extend API tests**
+- [x] **Step 3: Extend API tests**
 
 In `frontend/src/services/api.test.ts`, update the `getWatchlistInsights` mock response to include:
 
@@ -1092,7 +1092,7 @@ If the current exact message does not contain `数据健康`, assert the exact e
 expect(result.data_health_overview?.message).toBe('当前自选股数据健康状况可用于基础参考。');
 ```
 
-- [ ] **Step 4: Run frontend API tests**
+- [x] **Step 4: Run frontend API tests**
 
 Run:
 
@@ -1103,7 +1103,7 @@ npm test -- --run src/services/api.test.ts
 
 Expected: API tests pass.
 
-- [ ] **Step 5: Run TypeScript**
+- [x] **Step 5: Run TypeScript**
 
 Run:
 
@@ -1114,7 +1114,7 @@ npx tsc --noEmit
 
 Expected: TypeScript passes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add frontend/src/types/index.ts frontend/src/services/api.test.ts
@@ -1135,7 +1135,7 @@ git commit -m "feat: add ordinary user trust client types"
 - Consumes: `WatchlistInsights.data_health_overview`
 - Produces: Home page data health message under watchlist insights
 
-- [ ] **Step 1: Read Expo 56 docs before frontend changes**
+- [x] **Step 1: Read Expo 56 docs before frontend changes**
 
 Open:
 
@@ -1145,7 +1145,7 @@ https://docs.expo.dev/versions/v56.0.0/
 
 Confirm this task uses only React Native core components already present in the app: `View`, `Text`, and `ActivityIndicator`.
 
-- [ ] **Step 2: Add i18n labels**
+- [x] **Step 2: Add i18n labels**
 
 In each locale under `home`, add equivalent labels:
 
@@ -1161,7 +1161,7 @@ dataHealthOverview: 'Data health overview',
 dataUpdatedAt: 'Data updated at',
 ```
 
-- [ ] **Step 3: Render overview in HomeScreen**
+- [x] **Step 3: Render overview in HomeScreen**
 
 In `frontend/src/pages/HomeScreen.tsx`, inside the existing `watchlistInsights && (...)` block, render after `risk_overview`:
 
@@ -1185,7 +1185,7 @@ In `frontend/src/pages/HomeScreen.tsx`, inside the existing `watchlistInsights &
 
 Use the existing `formatUpdatedAt` import if it is already imported. If not, import it from `../utils/formatters` using the existing local path pattern.
 
-- [ ] **Step 4: Add styles**
+- [x] **Step 4: Add styles**
 
 Add to `StyleSheet.create`:
 
@@ -1205,7 +1205,7 @@ dataHealthTitle: {
 },
 ```
 
-- [ ] **Step 5: Run frontend tests and TypeScript**
+- [x] **Step 5: Run frontend tests and TypeScript**
 
 Run:
 
@@ -1217,7 +1217,7 @@ npx tsc --noEmit
 
 Expected: tests and TypeScript pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add frontend/src/pages/HomeScreen.tsx frontend/src/i18n/locales/zh.ts frontend/src/i18n/locales/zh-Hant.ts frontend/src/i18n/locales/en.ts
@@ -1238,7 +1238,7 @@ git commit -m "feat: show watchlist data health overview"
 - Consumes: `StockDetail.data_health`, `risk_explanations`, `buy_checklist`, `sell_checklist`
 - Produces: Detail page panels for data health, risk explanation, and pre-trade checklist
 
-- [ ] **Step 1: Read Expo 56 docs before frontend changes**
+- [x] **Step 1: Read Expo 56 docs before frontend changes**
 
 Open:
 
@@ -1248,7 +1248,7 @@ https://docs.expo.dev/versions/v56.0.0/
 
 Confirm this task uses `View`, `Text`, `Pressable`, and local component state only.
 
-- [ ] **Step 2: Add i18n labels**
+- [x] **Step 2: Add i18n labels**
 
 In each locale under `detail`, add equivalent labels:
 
@@ -1280,7 +1280,7 @@ missingData: 'Missing data',
 conclusionDowngraded: 'Downgrade reasons',
 ```
 
-- [ ] **Step 3: Add checklist tab state**
+- [x] **Step 3: Add checklist tab state**
 
 In `StockDetailScreen.tsx`, add:
 
@@ -1290,7 +1290,7 @@ const [activeChecklistMode, setActiveChecklistMode] = useState<'buy' | 'sell'>('
 
 Place it with other state declarations.
 
-- [ ] **Step 4: Render richer data health panel**
+- [x] **Step 4: Render richer data health panel**
 
 Replace the current single data health row inside `summaryPanel` with:
 
@@ -1316,7 +1316,7 @@ Replace the current single data health row inside `summaryPanel` with:
 </View>
 ```
 
-- [ ] **Step 5: Render risk explanations before factor section**
+- [x] **Step 5: Render risk explanations before factor section**
 
 Add before the existing factor section:
 
@@ -1338,7 +1338,7 @@ Add before the existing factor section:
 )}
 ```
 
-- [ ] **Step 6: Render checklist panel**
+- [x] **Step 6: Render checklist panel**
 
 Add after risk explanations:
 
@@ -1383,7 +1383,7 @@ Add after risk explanations:
 )}
 ```
 
-- [ ] **Step 7: Add styles**
+- [x] **Step 7: Add styles**
 
 Add to `StyleSheet.create`:
 
@@ -1441,7 +1441,7 @@ checklistItem: {
 },
 ```
 
-- [ ] **Step 8: Run frontend tests and TypeScript**
+- [x] **Step 8: Run frontend tests and TypeScript**
 
 Run:
 
@@ -1453,7 +1453,7 @@ npx tsc --noEmit
 
 Expected: tests and TypeScript pass.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git add frontend/src/pages/StockDetailScreen.tsx frontend/src/i18n/locales/zh.ts frontend/src/i18n/locales/zh-Hant.ts frontend/src/i18n/locales/en.ts
@@ -1472,7 +1472,7 @@ git commit -m "feat: show ordinary user risk and checklist panels"
 - Verifies: all backend and frontend work from Tasks 1-7
 - Produces: updated roadmap status only if all verification passes
 
-- [ ] **Step 1: Run backend tests**
+- [x] **Step 1: Run backend tests**
 
 Run:
 
@@ -1482,7 +1482,7 @@ python -m pytest backend/tests -q
 
 Expected: all backend tests pass.
 
-- [ ] **Step 2: Run frontend tests**
+- [x] **Step 2: Run frontend tests**
 
 Run:
 
@@ -1493,7 +1493,7 @@ npm test -- --run
 
 Expected: all frontend tests pass.
 
-- [ ] **Step 3: Run TypeScript**
+- [x] **Step 3: Run TypeScript**
 
 Run:
 
@@ -1504,7 +1504,7 @@ npx tsc --noEmit
 
 Expected: TypeScript passes.
 
-- [ ] **Step 4: Run API smoke**
+- [x] **Step 4: Run API smoke**
 
 Start backend if it is not running:
 
@@ -1533,7 +1533,7 @@ Expected:
 - `buy_checklist.mode` is `buy`.
 - `sell_checklist.mode` is `sell`.
 
-- [ ] **Step 5: Run Web smoke**
+- [x] **Step 5: Run Web smoke**
 
 Start web if it is not running:
 
@@ -1556,7 +1556,7 @@ Expected:
 - Stock detail shows ordinary summary, data health, risk explanation, and checklist panels.
 - No page text contains “立即买入”, “强烈卖出”, “必涨”, “稳赚”, or “最佳买点”.
 
-- [ ] **Step 6: Mark roadmap stage 1 complete only after verification passes**
+- [x] **Step 6: Mark roadmap stage 1 complete only after verification passes**
 
 In `docs/PRODUCT_COMMERCIALIZATION_ROADMAP.md`, change the unchecked stage 1 roadmap item to:
 
@@ -1570,7 +1570,7 @@ Change the stage 1 heading to:
 ## 4. 第 1 阶段：普通用户可信度与留存增强（已完成）
 ```
 
-- [ ] **Step 7: Commit verification and roadmap**
+- [x] **Step 7: Commit verification and roadmap**
 
 ```powershell
 git add docs/PRODUCT_COMMERCIALIZATION_ROADMAP.md docs/superpowers/plans/2026-07-09-ordinary-user-trust-retention.md
