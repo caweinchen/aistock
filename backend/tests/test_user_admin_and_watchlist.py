@@ -204,6 +204,43 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
       self.assertIn("positive", payload["groups"])
       self.assertIn("cautious", payload["groups"])
 
+    def test_stock_detail_returns_data_health_risk_explanations_and_checklists(self):
+      self.db.add(Stock(code="600000", name="浦发银行", price=8.1, change_percent=-1.2, score=42, signal="sell", data_status="normal"))
+      for index in range(30):
+          self.db.add(PricePointDB(stock_code="600000", date=f"2026-06-{index + 1:02d}", open=8, high=8.3, low=7.9, close=8.0, volume=10000))
+      self.db.add(FactorScoreDB(stock_code="600000", key="valuation", label="估值", value=35, description="估值偏高。"))
+      self.db.add(FactorScoreDB(stock_code="600000", key="volatility", label="波动", value=30, description="波动偏高。"))
+      self.db.commit()
+
+      alice_token = self._login("alice", "Alice@123!")
+      response = self.client.get("/api/stocks/600000", headers={"Authorization": f"Bearer {alice_token}"})
+
+      self.assertEqual(response.status_code, 200, response.text)
+      payload = response.json()
+      self.assertIn("data_health", payload)
+      self.assertIn("risk_explanations", payload)
+      self.assertIn("buy_checklist", payload)
+      self.assertIn("sell_checklist", payload)
+      self.assertTrue(payload["risk_explanations"])
+      self.assertEqual(payload["buy_checklist"]["mode"], "buy")
+      self.assertEqual(payload["sell_checklist"]["mode"], "sell")
+
+    def test_watchlist_insights_returns_data_health_overview(self):
+      self.db.add_all([
+          Stock(code="600010", name="包钢股份", price=1.2, change_percent=0.1, score=50, signal="neutral", data_status="partial"),
+          WatchlistItem(user_id=self.user_a.id, stock_code="600010", created_at=datetime.now(timezone.utc)),
+      ])
+      self.db.commit()
+
+      alice_token = self._login("alice", "Alice@123!")
+      response = self.client.get("/api/watchlist/insights", headers={"Authorization": f"Bearer {alice_token}"})
+
+      self.assertEqual(response.status_code, 200, response.text)
+      overview = response.json()["data_health_overview"]
+      self.assertEqual(overview["total"], 1)
+      self.assertGreaterEqual(overview["insufficient_count"], 1)
+      self.assertIn("数据", overview["message"])
+
     def test_add_new_watchlist_stock_fetches_realtime_price(self):
       alice_token = self._login("alice", "Alice@123!")
 

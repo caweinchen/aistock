@@ -34,6 +34,14 @@ from app.eastmoney_service import init_eastmoney, get_eastmoney_service
 from app.config import tushare_config
 from app.backtest_engine import BacktestResult, build_strategy_summaries, run_backtest
 from app.rsa_utils import get_rsa_utils
+from app.ordinary_user import (
+    ChecklistMode,
+    ChecklistStatus,
+    RiskType,
+    build_data_health,
+    build_pre_trade_checklist,
+    build_risk_explanations,
+)
 
 Signal = Literal["neutral", "buy", "sell"]
 ReferenceStatus = Literal["positive", "watch", "cautious", "insufficient_data"]
@@ -197,6 +205,47 @@ class PricePoint(BaseModel):
     volume: int
 
 
+class DataHealth(BaseModel):
+    completeness: DataCompleteness = "incomplete"
+    updated_at: datetime | None = None
+    source_summary: list[str] = Field(default_factory=list)
+    missing_items: list[str] = Field(default_factory=list)
+    downgrade_reasons: list[str] = Field(default_factory=list)
+    user_message: str = "当前数据不完整，结论只能弱参考。"
+
+
+class RiskExplanation(BaseModel):
+    type: RiskType
+    level: RiskLevel
+    title: str
+    what_it_means: str
+    why_it_matters: str
+    evidence: list[str] = Field(default_factory=list)
+
+
+class ChecklistItem(BaseModel):
+    key: str
+    label: str
+    status: ChecklistStatus
+    explanation: str
+    user_confirm_required: bool = False
+
+
+class PreTradeChecklist(BaseModel):
+    mode: ChecklistMode
+    title: str
+    completion_hint: str
+    items: list[ChecklistItem] = Field(default_factory=list)
+
+
+class WatchlistDataHealthOverview(BaseModel):
+    total: int = 0
+    insufficient_count: int = 0
+    incomplete_count: int = 0
+    latest_updated_at: datetime | None = None
+    message: str = "当前自选股数据健康状况可用于基础参考。"
+
+
 class StockDetail(BaseModel):
     stock: StockSummary
     factors: list[FactorScore]
@@ -212,6 +261,10 @@ class StockDetail(BaseModel):
     data_completeness: DataCompleteness = "incomplete"
     data_updated_at: datetime | None = None
     disclaimer: str = "仅供学习和分析参考，不构成投资建议。"
+    data_health: DataHealth | None = None
+    risk_explanations: list[RiskExplanation] = Field(default_factory=list)
+    buy_checklist: PreTradeChecklist | None = None
+    sell_checklist: PreTradeChecklist | None = None
 
 
 class WatchlistInsights(BaseModel):
@@ -220,6 +273,7 @@ class WatchlistInsights(BaseModel):
     risk_overview: str
     data_updated_at: datetime | None = None
     disclaimer: str = "仅供学习和分析参考，不构成投资建议。"
+    data_health_overview: WatchlistDataHealthOverview | None = None
 
 
 app = FastAPI(
@@ -377,6 +431,23 @@ def stock_to_summary(
         primary_risk=build_primary_risk(status, data_completeness),
         data_completeness=data_completeness,
         data_updated_at=stock.updated_at,
+    )
+
+
+def data_health_to_model(result) -> DataHealth:
+    return DataHealth(**result.__dict__)
+
+
+def risk_explanation_to_model(result) -> RiskExplanation:
+    return RiskExplanation(**result.__dict__)
+
+
+def checklist_to_model(result) -> PreTradeChecklist:
+    return PreTradeChecklist(
+        mode=result.mode,
+        title=result.title,
+        completion_hint=result.completion_hint,
+        items=[ChecklistItem(**item.__dict__) for item in result.items],
     )
 
 
@@ -731,6 +802,12 @@ def get_stock_detail(db: Session, code: str, update_realtime: bool = True) -> St
     factor_models = [db_factor_to_model(f) for f in factors]
     alert_models = [db_alert_to_model(a) for a in alerts]
     data_completeness = determine_data_completeness(stock, history, factor_models)
+    holder_rows = db.query(InstHoldDB).filter(InstHoldDB.stock_code == code).all()
+    dividend_rows = db.query(DividendDB).filter(DividendDB.stock_code == code).all()
+    data_health_result = build_data_health(stock, history, factor_models, alert_models, holder_rows, dividend_rows)
+    risk_results = build_risk_explanations(stock, factor_models, alert_models, holder_rows, dividend_rows, data_health_result)
+    buy_checklist_result = build_pre_trade_checklist(stock, risk_results, data_health_result, mode="buy")
+    sell_checklist_result = build_pre_trade_checklist(stock, risk_results, data_health_result, mode="sell")
     ordinary_summary, support_factors, risk_factors = build_ordinary_stock_summary(
         stock,
         factor_models,
@@ -753,6 +830,10 @@ def get_stock_detail(db: Session, code: str, update_realtime: bool = True) -> St
         risk_factors=risk_factors,
         data_completeness=data_completeness,
         data_updated_at=stock.updated_at,
+        data_health=data_health_to_model(data_health_result),
+        risk_explanations=[risk_explanation_to_model(result) for result in risk_results],
+        buy_checklist=checklist_to_model(buy_checklist_result),
+        sell_checklist=checklist_to_model(sell_checklist_result),
     )
 
 
@@ -1434,9 +1515,16 @@ def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(g
         "insufficient_data": [],
     }
     latest_updated_at = None
+    insufficient_count = 0
+    incomplete_count = 0
 
     for stock in stocks:
         summary = stock_to_summary(stock)
+        data_health_result = build_data_health(stock)
+        if data_health_result.completeness == "insufficient":
+            insufficient_count += 1
+        if data_health_result.completeness == "incomplete":
+            incomplete_count += 1
         groups[summary.reference_status].append(summary)
         if stock.updated_at and (latest_updated_at is None or stock.updated_at > latest_updated_at):
             latest_updated_at = stock.updated_at
@@ -1450,11 +1538,25 @@ def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(g
     else:
         risk_overview = "当前自选股未发现集中高风险提示，仍需结合仓位和估值检查。"
 
+    if insufficient_count:
+        health_message = f"当前自选股中有 {insufficient_count} 只数据不足，相关结论已降级。"
+    elif incomplete_count:
+        health_message = f"当前自选股中有 {incomplete_count} 只数据不完整，建议结合详情页继续查看。"
+    else:
+        health_message = "当前自选股数据健康状况可用于基础参考。"
+
     return WatchlistInsights(
         total=len(stocks),
         groups=groups,
         risk_overview=risk_overview,
         data_updated_at=latest_updated_at,
+        data_health_overview=WatchlistDataHealthOverview(
+            total=len(stocks),
+            insufficient_count=insufficient_count,
+            incomplete_count=incomplete_count,
+            latest_updated_at=latest_updated_at,
+            message=health_message,
+        ),
     )
 
 
