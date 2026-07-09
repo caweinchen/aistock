@@ -301,6 +301,8 @@ export const zh = {
     groupCautious: '谨慎关注',
     groupInsufficientData: '数据不足',
     investmentDisclaimer: '仅供学习和分析参考，不构成投资建议。',
+    dataHealthOverview: '数据健康概览',
+    dataUpdatedAt: '数据更新时间',
   },
   chart: {
     title: '价格走势',

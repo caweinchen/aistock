@@ -301,6 +301,8 @@ export const zhHant = {
     groupCautious: '謹慎關注',
     groupInsufficientData: '數據不足',
     investmentDisclaimer: '僅供學習和分析參考，不構成投資建議。',
+    dataHealthOverview: '數據健康概覽',
+    dataUpdatedAt: '數據更新時間',
   },
   chart: {
     title: '價格走勢',

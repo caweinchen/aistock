@@ -301,6 +301,8 @@ export const en = {
     groupCautious: 'Use Caution',
     groupInsufficientData: 'Insufficient Data',
     investmentDisclaimer: 'For learning and analysis only. Not investment advice.',
+    dataHealthOverview: 'Data health overview',
+    dataUpdatedAt: 'Data updated at',
   },
   chart: {
     title: 'Price Trend',

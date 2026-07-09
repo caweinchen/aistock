@@ -266,6 +266,21 @@ export function HomeScreen({
           {watchlistInsights && (
             <>
               <Text style={styles.subtleText}>{watchlistInsights.risk_overview}</Text>
+              {watchlistInsights.data_health_overview && (
+                <View style={styles.dataHealthStrip}>
+                  <Text style={styles.dataHealthTitle}>{t.home.dataHealthOverview}</Text>
+                  <Text style={styles.subtleText}>{watchlistInsights.data_health_overview.message}</Text>
+                  {watchlistInsights.data_health_overview.latest_updated_at && (
+                    <Text style={styles.disclaimerText}>
+                      {t.home.dataUpdatedAt}: {formatUpdatedAt(
+                        watchlistInsights.data_health_overview.latest_updated_at,
+                        locale === 'zh' ? 'zh-CN' : locale === 'zh-Hant' ? 'zh-TW' : 'en-US',
+                        t.formatter.updated,
+                      )}
+                    </Text>
+                  )}
+                </View>
+              )}
               {(['positive', 'watch', 'cautious', 'insufficient_data'] as const).map((groupKey) => {
                 const items = watchlistInsights.groups[groupKey] ?? [];
                 return (
@@ -456,6 +471,19 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   insightHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  dataHealthStrip: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+    padding: 12,
+  },
+  dataHealthTitle: {
+    color: '#162033',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   insightGroup: { gap: 8 },
   insightGroupTitle: { color: '#162033', fontSize: 14, fontWeight: '800' },
   insightItem: {
