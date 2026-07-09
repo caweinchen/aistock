@@ -806,7 +806,7 @@ git commit -m "feat: add watchlist intelligence client types"
 - Consumes: `WatchlistInsights.intelligence`
 - Produces: radar and read-only observations in the existing home watchlist insights panel
 
-- [ ] **Step 1: Read Expo 56 docs before frontend changes**
+- [x] **Step 1: Read Expo 56 docs before frontend changes**
 
 Open:
 
@@ -816,7 +816,7 @@ https://docs.expo.dev/versions/v56.0.0/
 
 Confirm this task uses only React Native core components already present in the app: `View`, `Text`, `Pressable`, and `ActivityIndicator`.
 
-- [ ] **Step 2: Add i18n labels**
+- [x] **Step 2: Add i18n labels**
 
 In each locale under `home`, add:
 
@@ -844,7 +844,7 @@ relatedStocks: '相關自選股',
 
 If the file currently displays mojibake in the local console, add the keys using the same object structure and do not rewrite unrelated locale content.
 
-- [ ] **Step 3: Render radar after data health overview**
+- [x] **Step 3: Render radar after data health overview**
 
 In `frontend/src/pages/HomeScreen.tsx`, inside the existing `watchlistInsights && (...)` block and after the `data_health_overview` block, add:
 
@@ -868,7 +868,7 @@ In `frontend/src/pages/HomeScreen.tsx`, inside the existing `watchlistInsights &
               )}
 ```
 
-- [ ] **Step 4: Render observations after radar**
+- [x] **Step 4: Render observations after radar**
 
 Below the radar block, add:
 
@@ -891,7 +891,7 @@ Below the radar block, add:
               )}
 ```
 
-- [ ] **Step 5: Add styles**
+- [x] **Step 5: Add styles**
 
 Add to `StyleSheet.create`:
 
@@ -933,7 +933,7 @@ observationItem: {
 },
 ```
 
-- [ ] **Step 6: Run frontend tests and TypeScript**
+- [x] **Step 6: Run frontend tests and TypeScript**
 
 Run:
 
@@ -945,7 +945,7 @@ npx tsc --noEmit
 
 Expected: tests and TypeScript pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add frontend/src/pages/HomeScreen.tsx frontend/src/i18n/locales/zh.ts frontend/src/i18n/locales/zh-Hant.ts frontend/src/i18n/locales/en.ts docs/superpowers/plans/2026-07-10-watchlist-intelligence.md

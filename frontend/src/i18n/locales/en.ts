@@ -313,6 +313,9 @@ export const en = {
     investmentDisclaimer: 'For learning and analysis only. Not investment advice.',
     dataHealthOverview: 'Data health overview',
     dataUpdatedAt: 'Data updated at',
+    watchlistRadar: 'Watchlist radar',
+    todayObservations: 'Today observations',
+    relatedStocks: 'Related stocks',
   },
   chart: {
     title: 'Price Trend',

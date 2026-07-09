@@ -281,6 +281,39 @@ export function HomeScreen({
                   )}
                 </View>
               )}
+              {watchlistInsights.intelligence?.radar && (
+                <View style={styles.watchlistRadarCard}>
+                  <Text style={styles.dataHealthTitle}>{t.home.watchlistRadar}</Text>
+                  <Text style={styles.subtleText}>{watchlistInsights.intelligence.radar.summary}</Text>
+                  <View style={styles.radarStatsRow}>
+                    <Text style={styles.radarStatText}>
+                      {watchlistInsights.intelligence.radar.priority_count} {groupTitle('positive', t)}
+                    </Text>
+                    <Text style={styles.radarStatText}>
+                      {watchlistInsights.intelligence.radar.cautious_count} {groupTitle('cautious', t)}
+                    </Text>
+                    <Text style={styles.radarStatText}>
+                      {watchlistInsights.intelligence.radar.insufficient_count} {groupTitle('insufficient_data', t)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              {Boolean(watchlistInsights.intelligence?.observations?.length) && (
+                <View style={styles.observationBlock}>
+                  <Text style={styles.dataHealthTitle}>{t.home.todayObservations}</Text>
+                  {watchlistInsights.intelligence!.observations.slice(0, 3).map((observation) => (
+                    <View key={`${observation.type}-${observation.title}`} style={styles.observationItem}>
+                      <Text style={styles.insightName}>{observation.title}</Text>
+                      <Text style={styles.insightReason}>{observation.description}</Text>
+                      {Boolean(observation.stock_codes.length) && (
+                        <Text style={styles.disclaimerText}>
+                          {t.home.relatedStocks}: {observation.stock_codes.join(', ')}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
               {(['positive', 'watch', 'cautious', 'insufficient_data'] as const).map((groupKey) => {
                 const items = watchlistInsights.groups[groupKey] ?? [];
                 return (
@@ -483,6 +516,41 @@ const styles = StyleSheet.create({
     color: '#162033',
     fontSize: 13,
     fontWeight: '700',
+  },
+  watchlistRadarCard: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    padding: 12,
+  },
+  radarStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  radarStatText: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    borderWidth: 1,
+    color: '#374151',
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  observationBlock: {
+    gap: 8,
+  },
+  observationItem: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+    padding: 12,
   },
   insightGroup: { gap: 8 },
   insightGroupTitle: { color: '#162033', fontSize: 14, fontWeight: '800' },

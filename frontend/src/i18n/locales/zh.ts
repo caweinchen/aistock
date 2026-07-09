@@ -313,6 +313,9 @@ export const zh = {
     investmentDisclaimer: '仅供学习和分析参考，不构成投资建议。',
     dataHealthOverview: '数据健康概览',
     dataUpdatedAt: '数据更新时间',
+    watchlistRadar: '自选股机会雷达',
+    todayObservations: '今日观察建议',
+    relatedStocks: '相关自选股',
   },
   chart: {
     title: '价格走势',

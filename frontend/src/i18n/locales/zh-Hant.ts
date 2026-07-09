@@ -313,6 +313,9 @@ export const zhHant = {
     investmentDisclaimer: '僅供學習和分析參考，不構成投資建議。',
     dataHealthOverview: '數據健康概覽',
     dataUpdatedAt: '數據更新時間',
+    watchlistRadar: '自選股機會雷達',
+    todayObservations: '今日觀察建議',
+    relatedStocks: '相關自選股',
   },
   chart: {
     title: '價格走勢',
