@@ -36,6 +36,7 @@ export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchS
   const [dividendLoading, setDividendLoading] = useState(false);
   const [news, setNews] = useState<StockNews[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
+  const [activeChecklistMode, setActiveChecklistMode] = useState<'buy' | 'sell'>('buy');
 
   // Cache-first loading on mount
   useEffect(() => {
@@ -293,9 +294,24 @@ export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchS
       <View style={styles.summaryPanel}>
         <Text style={styles.sectionTitle}>{t.detail.ordinarySummary}</Text>
         <Text style={styles.summaryText}>{detail.ordinary_summary ?? detail.ai_summary}</Text>
-        <View style={styles.dataHealthRow}>
-          <Text style={styles.dataHealthLabel}>{t.detail.dataHealth}</Text>
-          <Text style={styles.dataHealthValue}>{detail.data_completeness ?? detail.data_status}</Text>
+        <View style={styles.dataHealthBlock}>
+          <View style={styles.dataHealthRow}>
+            <Text style={styles.dataHealthLabel}>{t.detail.dataHealth}</Text>
+            <Text style={styles.dataHealthValue}>{detail.data_health?.completeness ?? detail.data_completeness ?? detail.data_status}</Text>
+          </View>
+          {detail.data_health?.user_message && (
+            <Text style={styles.summaryText}>{detail.data_health.user_message}</Text>
+          )}
+          {Boolean(detail.data_health?.missing_items?.length) && (
+            <Text style={styles.disclaimerText}>
+              {t.detail.missingData}: {detail.data_health!.missing_items.join('、')}
+            </Text>
+          )}
+          {Boolean(detail.data_health?.downgrade_reasons?.length) && (
+            <Text style={styles.disclaimerText}>
+              {t.detail.conclusionDowngraded}: {detail.data_health!.downgrade_reasons.join('、')}
+            </Text>
+          )}
         </View>
         <Text style={styles.disclaimerText}>{detail.disclaimer ?? t.home.investmentDisclaimer}</Text>
       </View>
@@ -313,6 +329,61 @@ export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchS
         <View style={styles.reasonPanel}>
           <Text style={styles.sectionTitle}>{t.detail.riskFactors}</Text>
           {detail.risk_factors!.map((item) => <Text key={item} style={styles.reasonText}>• {item}</Text>)}
+        </View>
+      )}
+
+      {Boolean(detail.risk_explanations?.length) && (
+        <View style={styles.reasonPanel}>
+          <Text style={styles.sectionTitle}>{t.detail.riskExplanation}</Text>
+          {detail.risk_explanations!.map((risk) => (
+            <View key={`${risk.type}-${risk.title}`} style={styles.riskExplanationCard}>
+              <Text style={styles.riskTitle}>{risk.title}</Text>
+              <Text style={styles.reasonText}>{t.detail.whatItMeans}: {risk.what_it_means}</Text>
+              <Text style={styles.reasonText}>{t.detail.whyItMatters}: {risk.why_it_matters}</Text>
+              {Boolean(risk.evidence.length) && (
+                <Text style={styles.disclaimerText}>{t.detail.evidence}: {risk.evidence.join('、')}</Text>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+
+      {(detail.buy_checklist || detail.sell_checklist) && (
+        <View style={styles.reasonPanel}>
+          <Text style={styles.sectionTitle}>{t.detail.preTradeChecklist}</Text>
+          <View style={styles.checklistTabs}>
+            <Pressable
+              style={[styles.checklistTab, activeChecklistMode === 'buy' && styles.checklistTabActive]}
+              onPress={() => setActiveChecklistMode('buy')}
+            >
+              <Text style={[styles.checklistTabText, activeChecklistMode === 'buy' && styles.checklistTabTextActive]}>
+                {t.detail.buyChecklist}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.checklistTab, activeChecklistMode === 'sell' && styles.checklistTabActive]}
+              onPress={() => setActiveChecklistMode('sell')}
+            >
+              <Text style={[styles.checklistTabText, activeChecklistMode === 'sell' && styles.checklistTabTextActive]}>
+                {t.detail.sellChecklist}
+              </Text>
+            </Pressable>
+          </View>
+          {(() => {
+            const checklist = activeChecklistMode === 'buy' ? detail.buy_checklist : detail.sell_checklist;
+            if (!checklist) return null;
+            return (
+              <View style={styles.checklistBody}>
+                <Text style={styles.summaryText}>{checklist.completion_hint}</Text>
+                {checklist.items.map((item) => (
+                  <View key={item.key} style={styles.checklistItem}>
+                    <Text style={styles.riskTitle}>{item.label}</Text>
+                    <Text style={styles.reasonText}>{item.explanation}</Text>
+                  </View>
+                ))}
+              </View>
+            );
+          })()}
         </View>
       )}
 
@@ -626,6 +697,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   summaryText: { color: '#374151', fontSize: 14, lineHeight: 22 },
+  dataHealthBlock: {
+    gap: 8,
+  },
   dataHealthRow: {
     alignItems: 'center',
     borderTopColor: '#EEF2F7',
@@ -646,6 +720,54 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   reasonText: { color: '#4B5563', fontSize: 13, lineHeight: 20 },
+  riskExplanationCard: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    padding: 12,
+  },
+  riskTitle: {
+    color: '#162033',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  checklistTabs: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  checklistTab: {
+    alignItems: 'center',
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    paddingVertical: 10,
+  },
+  checklistTabActive: {
+    backgroundColor: '#E9FBF7',
+    borderColor: '#0F8B8D',
+  },
+  checklistTabText: {
+    color: '#6B7280',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  checklistTabTextActive: {
+    color: '#0F8B8D',
+  },
+  checklistBody: {
+    gap: 10,
+  },
+  checklistItem: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+    padding: 12,
+  },
   sectionHeader: { marginTop: 8 },
   sectionTitle: { color: '#162033', fontSize: 18, fontWeight: '800' },
   factorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
