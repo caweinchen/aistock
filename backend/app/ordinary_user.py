@@ -210,3 +210,99 @@ def build_risk_explanations(stock, factors=None, alerts=None, holders=None, divi
         ))
 
     return risks[:6]
+
+
+def _has_risk(risks: list[RiskExplanationResult], risk_type: RiskType) -> bool:
+    return any(risk.type == risk_type for risk in risks)
+
+
+def _risk_status(risks: list[RiskExplanationResult], risk_type: RiskType) -> ChecklistStatus:
+    return "attention" if _has_risk(risks, risk_type) else "pass"
+
+
+def build_pre_trade_checklist(stock, risk_explanations, data_health, mode: ChecklistMode) -> PreTradeChecklistResult:
+    risks = risk_explanations or []
+    data_status: ChecklistStatus = "insufficient_data" if data_health.completeness in ("insufficient", "incomplete") else "pass"
+
+    if mode == "buy":
+        items = [
+            ChecklistItemResult(
+                key="understand_business",
+                label="我是否了解公司主营业务？",
+                status="user_confirm",
+                explanation="如果不了解公司靠什么赚钱，就不适合只凭短期涨跌做判断。",
+                user_confirm_required=True,
+            ),
+            ChecklistItemResult(
+                key="valuation_risk",
+                label="当前估值是否偏高？",
+                status=_risk_status(risks, "valuation"),
+                explanation="估值偏高时，需要确认未来业绩增长是否能支撑当前价格。",
+            ),
+            ChecklistItemResult(
+                key="holder_change",
+                label="是否存在重要股东明显减持？",
+                status=_risk_status(risks, "holder_change"),
+                explanation="重要股东减持可能带来筹码压力，需要继续观察公告和价格表现。",
+            ),
+            ChecklistItemResult(
+                key="drawdown_tolerance",
+                label="如果下跌 10%-20%，我是否能接受？",
+                status="user_confirm",
+                explanation="普通用户需要先确认自己能否承受可能回撤，再考虑后续动作。",
+                user_confirm_required=True,
+            ),
+            ChecklistItemResult(
+                key="data_quality",
+                label="当前数据是否足够形成判断？",
+                status=data_status,
+                explanation=data_health.user_message,
+            ),
+        ]
+        return PreTradeChecklistResult(
+            mode="buy",
+            title="买入前检查",
+            completion_hint="完成这些检查后，再结合仓位和个人风险承受能力判断。",
+            items=items,
+        )
+
+    items = [
+        ChecklistItemResult(
+            key="thesis_invalid",
+            label="买入逻辑是否已经失效？",
+            status="user_confirm",
+            explanation="先确认原来的关注理由是否改变，避免只因短期波动做决定。",
+            user_confirm_required=True,
+        ),
+        ChecklistItemResult(
+            key="fundamental_risk",
+            label="业绩或基本面是否明显恶化？",
+            status=_risk_status(risks, "fundamentals"),
+            explanation="如果基本面风险变高，需要重新评估继续持有的理由。",
+        ),
+        ChecklistItemResult(
+            key="valuation_risk",
+            label="估值是否已经过高？",
+            status=_risk_status(risks, "valuation"),
+            explanation="估值过高时，后续收益更依赖业绩继续超预期。",
+        ),
+        ChecklistItemResult(
+            key="avoid_panic",
+            label="是否只是因为短期波动而恐慌？",
+            status="user_confirm",
+            explanation="短期波动不一定代表长期逻辑失效，需要和风险证据一起看。",
+            user_confirm_required=True,
+        ),
+        ChecklistItemResult(
+            key="data_quality",
+            label="当前数据是否足够支持判断？",
+            status=data_status,
+            explanation=data_health.user_message,
+        ),
+    ]
+    return PreTradeChecklistResult(
+        mode="sell",
+        title="卖出前检查",
+        completion_hint="先区分逻辑失效和短期波动，再决定是否继续观察。",
+        items=items,
+    )

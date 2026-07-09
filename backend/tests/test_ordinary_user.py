@@ -64,6 +64,36 @@ class OrdinaryUserDataHealthTests(unittest.TestCase):
         self.assertTrue(any(risk.type == "data_quality" for risk in risks))
         self.assertTrue(any("数据不足" in risk.title for risk in risks))
 
+    def test_buy_checklist_contains_system_and_user_confirmation_items(self):
+        from backend.app.ordinary_user import build_pre_trade_checklist, build_risk_explanations
+
+        stock = SimpleNamespace(score=42, signal="sell", data_status="normal", updated_at=datetime(2026, 7, 9, 10, 0))
+        factors = [SimpleNamespace(key="valuation", label="估值", value=35, description="估值偏高。")]
+        data_health = build_data_health(stock, history=[SimpleNamespace(date=str(i)) for i in range(30)], factors=factors)
+        risks = build_risk_explanations(stock, factors=factors, data_health=data_health)
+
+        checklist = build_pre_trade_checklist(stock, risks, data_health, mode="buy")
+
+        self.assertEqual(checklist.mode, "buy")
+        self.assertTrue(any(item.key == "understand_business" and item.user_confirm_required for item in checklist.items))
+        self.assertTrue(any(item.key == "valuation_risk" and item.status == "attention" for item in checklist.items))
+        self.assertIn("检查", checklist.completion_hint)
+
+    def test_sell_checklist_contains_panic_check(self):
+        from backend.app.ordinary_user import build_pre_trade_checklist
+
+        stock = SimpleNamespace(score=70, signal="neutral", data_status="normal", updated_at=datetime(2026, 7, 9, 10, 0))
+        data_health = build_data_health(
+            stock,
+            history=[SimpleNamespace(date=str(i)) for i in range(30)],
+            factors=[SimpleNamespace(key="valuation", value=65)] * 4,
+        )
+
+        checklist = build_pre_trade_checklist(stock, [], data_health, mode="sell")
+
+        self.assertEqual(checklist.mode, "sell")
+        self.assertTrue(any(item.key == "avoid_panic" for item in checklist.items))
+
 
 if __name__ == "__main__":
     unittest.main()
