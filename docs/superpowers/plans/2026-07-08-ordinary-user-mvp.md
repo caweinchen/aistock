@@ -750,7 +750,7 @@ git commit -m "feat: add ordinary stock detail summary"
 **接口：**
 - 验证后端和前端行为是否一致。
 
-- [ ] **步骤 1：运行后端测试**
+- [x] **步骤 1：运行后端测试**
 
 ```powershell
 python -m pytest backend/tests -q
@@ -776,7 +776,7 @@ npx tsc --noEmit
 
 预期：通过。
 
-- [ ] **步骤 4：手动 API 冒烟测试**
+- [x] **步骤 4：手动 API 冒烟测试**
 
 启动后端：
 
@@ -792,7 +792,7 @@ Invoke-RestMethod -Uri http://127.0.0.1:8000/api/watchlist/insights -Headers @{ 
 
 预期 JSON 包含：`total`、`groups.positive`、`groups.watch`、`groups.cautious`、`groups.insufficient_data`、`risk_overview`、`disclaimer`。
 
-- [ ] **步骤 5：手动 App 冒烟测试**
+- [x] **步骤 5：手动 App 冒烟测试**
 
 ```powershell
 cd frontend

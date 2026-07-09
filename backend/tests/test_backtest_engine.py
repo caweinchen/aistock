@@ -265,7 +265,10 @@ class BacktestApiConversionTests(unittest.TestCase):
         )]
         stock = Mock(updated_at=datetime(2026, 7, 4, 19, 41, 32))
 
-        with patch(
+        with patch("backend.app.main._is_trading_time", return_value=False), patch(
+            "backend.app.main._last_market_session_end_time",
+            return_value=datetime(2026, 7, 4, 15, 0),
+        ), patch(
             "backend.app.main.get_initialized_tushare_service",
             side_effect=AssertionError("refresh decision should not call TuShare calendar"),
         ):
