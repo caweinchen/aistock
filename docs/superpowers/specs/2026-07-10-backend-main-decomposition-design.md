@@ -23,6 +23,7 @@
 
 - 新增 `backend/app/schemas.py`，迁出 Pydantic schema 和共享 `Literal` 类型。
 - 新增 `backend/app/routers/auth.py`，迁出认证相关路由。
+- 新增 `backend/app/stock_summary.py`，迁出 `stock_to_summary` 及其依赖的纯辅助函数，避免 router 反向依赖 `main.py`。
 - 新增 `backend/app/routers/watchlist.py`，迁出自选股和 watchlist intelligence 路由。
 - `main.py` 通过 `include_router(...)` 注册新 router。
 - 第一轮完成后 `main.py` 行数明显下降，并且不再继续承载新自选股能力。
@@ -46,6 +47,7 @@
 ```text
 backend/app/main.py
 backend/app/schemas.py
+backend/app/stock_summary.py
 backend/app/routers/__init__.py
 backend/app/routers/auth.py
 backend/app/routers/watchlist.py
@@ -67,6 +69,11 @@ backend/app/routers/watchlist.py
   - 保存 `/api/watchlist`、`/api/watchlist/insights`、新增/删除自选股路由。
   - 复用 watchlist intelligence 和 ordinary user 规则。
   - 不处理个股详情页面完整装配。
+
+- `stock_summary.py`
+  - 保存 `determine_data_completeness`、`determine_reference_status`、`reference_label`、`build_primary_support`、`build_primary_risk`、`stock_to_summary` 等纯装配函数。
+  - 可被 `main.py` 和 `routers/watchlist.py` 共同使用。
+  - 不注册路由。
 
 - `main.py`
   - 保留 app 初始化、CORS、startup、健康检查和暂未拆分的旧路由。
@@ -126,7 +133,7 @@ python -m pytest backend/tests -q
 
 ## 8. TODO 跟踪
 
-- [ ] 第一轮：拆出 `schemas.py`、`routers/auth.py`、`routers/watchlist.py`
+- [ ] 第一轮：拆出 `schemas.py`、`stock_summary.py`、`routers/auth.py`、`routers/watchlist.py`
 - [ ] 第二轮：拆出股票详情和股票数据查询 router
 - [ ] 第三轮：拆出数据刷新和数据源状态 router
 - [ ] 第四轮：拆出 backtest router
@@ -140,8 +147,8 @@ python -m pytest backend/tests -q
 
 - `main.py` 行数明显下降。
 - `schemas.py` 成为 API schema 的统一入口。
+- `stock_summary.py` 成为股票摘要和分组辅助逻辑入口。
 - auth 和 watchlist 路由位于独立 router 文件。
 - 阶段 2 watchlist intelligence 行为保持不变。
 - 后端测试通过。
 - 本设计文档和对应实施计划同步标记已完成项。
-
