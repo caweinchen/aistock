@@ -290,6 +290,25 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
       self.assertIn("观察", intelligence["radar"]["summary"])
       self.assertTrue(any(item["focus_level"] in ["priority", "cautious", "watch", "insufficient_data"] for item in intelligence["insights"]))
 
+    def test_auth_and_watchlist_routes_remain_registered(self):
+      routes = {(route.path, ",".join(sorted(route.methods))) for route in self.client.app.routes if hasattr(route, "methods")}
+
+      expected = {
+          ("/api/auth/public-key", "GET"),
+          ("/api/auth/login", "POST"),
+          ("/api/auth/register", "POST"),
+          ("/api/auth/change-password", "POST"),
+          ("/api/auth/validate-password", "POST"),
+          ("/api/auth/verify", "GET"),
+          ("/api/auth/generate-password", "GET"),
+          ("/api/watchlist", "GET"),
+          ("/api/watchlist/insights", "GET"),
+          ("/api/watchlist/{code}", "POST"),
+          ("/api/watchlist/{code}", "DELETE"),
+      }
+
+      self.assertTrue(expected.issubset(routes))
+
     def test_add_new_watchlist_stock_fetches_realtime_price(self):
       alice_token = self._login("alice", "Alice@123!")
 

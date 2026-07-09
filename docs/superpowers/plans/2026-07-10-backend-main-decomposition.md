@@ -21,7 +21,7 @@
 
 ## TODO Tracking
 
-- [ ] Task 1: Add structural route tests
+- [x] Task 1: Add structural route tests
 - [ ] Task 2: Extract API schemas
 - [ ] Task 3: Extract stock summary helpers
 - [ ] Task 4: Extract auth router
@@ -53,7 +53,7 @@
 - Consumes: existing FastAPI `app` from `backend.app.main`.
 - Produces: route registration tests that prove auth and watchlist routes remain present after extraction.
 
-- [ ] **Step 1: Add route compatibility test**
+- [x] **Step 1: Add route compatibility test**
 
 Add this test method to `UserAdminAndWatchlistTests`:
 
@@ -78,7 +78,7 @@ Add this test method to `UserAdminAndWatchlistTests`:
       self.assertTrue(expected.issubset(routes))
 ```
 
-- [ ] **Step 2: Run route test**
+- [x] **Step 2: Run route test**
 
 Run:
 
@@ -88,7 +88,7 @@ python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWat
 
 Expected: passes before refactor, then continues to guard route registration.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add backend/tests/test_user_admin_and_watchlist.py docs/superpowers/plans/2026-07-10-backend-main-decomposition.md
