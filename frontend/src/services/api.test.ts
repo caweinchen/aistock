@@ -55,6 +55,13 @@ const watchlistInsights: WatchlistInsights = {
   risk_overview: '当前自选股未发现集中高风险提示，仍需结合仓位和估值检查。',
   data_updated_at: '2026-06-29T00:00:00Z',
   disclaimer: '仅供学习和分析参考，不构成投资建议。',
+  data_health_overview: {
+    total: 1,
+    insufficient_count: 0,
+    incomplete_count: 0,
+    latest_updated_at: '2026-07-09T10:00:00',
+    message: '当前自选股数据健康状况可用于基础参考。',
+  },
 };
 
 const dividend: DividendRecord[] = [{
@@ -214,7 +221,9 @@ describe('api cache policy', () => {
     vi.stubGlobal('fetch', fetchSpy);
     const { getWatchlistInsights } = await import('./api');
 
-    await expect(getWatchlistInsights()).resolves.toEqual(watchlistInsights);
+    const result = await getWatchlistInsights();
+    expect(result).toEqual(watchlistInsights);
+    expect(result.data_health_overview?.message).toBe('当前自选股数据健康状况可用于基础参考。');
     expect(fetchSpy).toHaveBeenCalledWith(
       'http://server.test/api/watchlist/insights',
       { headers: { Authorization: 'Bearer token' } },

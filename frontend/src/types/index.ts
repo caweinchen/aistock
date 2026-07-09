@@ -2,6 +2,9 @@ export type Signal = 'neutral' | 'buy' | 'sell';
 export type ReferenceStatus = 'positive' | 'watch' | 'cautious' | 'insufficient_data';
 export type DataCompleteness = 'complete' | 'mostly_complete' | 'incomplete' | 'insufficient';
 export type RiskLevel = 'low' | 'medium' | 'high';
+export type RiskType = 'valuation' | 'volatility' | 'fundamentals' | 'holder_change' | 'dividend' | 'data_quality';
+export type ChecklistMode = 'buy' | 'sell';
+export type ChecklistStatus = 'pass' | 'attention' | 'user_confirm' | 'insufficient_data';
 export type StrategyTemplate = 'trend-breakout' | 'low-valuation-reversal' | 'dividend-defense';
 
 export interface StockSummary {
@@ -66,6 +69,39 @@ export interface PricePoint {
   volume: number;
 }
 
+export interface DataHealth {
+  completeness: DataCompleteness;
+  updated_at?: string | null;
+  source_summary: string[];
+  missing_items: string[];
+  downgrade_reasons: string[];
+  user_message: string;
+}
+
+export interface RiskExplanation {
+  type: RiskType;
+  level: RiskLevel;
+  title: string;
+  what_it_means: string;
+  why_it_matters: string;
+  evidence: string[];
+}
+
+export interface ChecklistItem {
+  key: string;
+  label: string;
+  status: ChecklistStatus;
+  explanation: string;
+  user_confirm_required: boolean;
+}
+
+export interface PreTradeChecklist {
+  mode: ChecklistMode;
+  title: string;
+  completion_hint: string;
+  items: ChecklistItem[];
+}
+
 export interface StockDetail {
   stock: StockSummary;
   factors: FactorScore[];
@@ -81,6 +117,18 @@ export interface StockDetail {
   data_completeness?: DataCompleteness;
   data_updated_at?: string | null;
   disclaimer?: string;
+  data_health?: DataHealth | null;
+  risk_explanations?: RiskExplanation[];
+  buy_checklist?: PreTradeChecklist | null;
+  sell_checklist?: PreTradeChecklist | null;
+}
+
+export interface WatchlistDataHealthOverview {
+  total: number;
+  insufficient_count: number;
+  incomplete_count: number;
+  latest_updated_at?: string | null;
+  message: string;
 }
 
 export interface WatchlistInsights {
@@ -89,6 +137,7 @@ export interface WatchlistInsights {
   risk_overview: string;
   data_updated_at?: string | null;
   disclaimer: string;
+  data_health_overview?: WatchlistDataHealthOverview | null;
 }
 
 export interface ResearchSnapshot {
