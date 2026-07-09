@@ -359,7 +359,7 @@ def reference_label(status: ReferenceStatus) -> str:
 
 def build_primary_support(score: int, status: ReferenceStatus) -> str:
     if status == "positive":
-        return "当前综合表现靠前，适合加入重点观察，但不代表建议立即买入。"
+        return "当前综合表现靠前，适合加入重点观察，但仍需自行评估风险与仓位。"
     if status == "watch":
         return "当前缺少明确优势，适合继续观察后续业绩、资金和价格趋势变化。"
     if status == "cautious":
@@ -395,7 +395,7 @@ def build_ordinary_stock_summary(
 
     status = determine_reference_status(stock.score or 50, stock.signal or "neutral", data_completeness, alerts)
     if status == "positive":
-        summary = "当前整体偏积极，适合加入重点观察，但不代表建议立即买入。"
+        summary = "当前整体偏积极，适合加入重点观察，但仍需自行评估风险与仓位。"
     elif status == "cautious":
         summary = "当前风险项较多，建议谨慎关注，并先完成操作前检查。"
     else:

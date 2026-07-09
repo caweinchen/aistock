@@ -17,6 +17,8 @@ from app.security import hash_password
 
 
 class UserAdminAndWatchlistTests(unittest.TestCase):
+    forbidden_trading_phrases = ("立即买入", "强烈卖出", "必涨", "稳赚", "最佳买点")
+
     def setUp(self):
       engine = create_engine(
           "sqlite://",
@@ -184,6 +186,30 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
       self.assertIn("support_factors", payload)
       self.assertIn("risk_factors", payload)
       self.assertEqual(payload["disclaimer"], "仅供学习和分析参考，不构成投资建议。")
+
+    def test_ordinary_user_copy_does_not_include_direct_trading_phrases(self):
+      self.db.add(Stock(
+          code="600519",
+          name="Kweichow Moutai",
+          price=1688.0,
+          change_percent=1.5,
+          score=82,
+          signal="buy",
+          data_status="normal",
+          updated_at=datetime(2026, 7, 8, 9, 30, tzinfo=timezone.utc),
+      ))
+      self.db.add(WatchlistItem(user_id=self.user_a.id, stock_code="600519", created_at=datetime.now(timezone.utc)))
+      self.db.commit()
+
+      alice_token = self._login("alice", "Alice@123!")
+      list_response = self.client.get("/api/stocks", headers={"Authorization": f"Bearer {alice_token}"})
+      detail_response = self.client.get("/api/stocks/600519", headers={"Authorization": f"Bearer {alice_token}"})
+
+      self.assertEqual(list_response.status_code, 200, list_response.text)
+      self.assertEqual(detail_response.status_code, 200, detail_response.text)
+      rendered_copy = " ".join([list_response.text, detail_response.text])
+      for phrase in self.forbidden_trading_phrases:
+          self.assertNotIn(phrase, rendered_copy)
 
     def test_watchlist_insights_groups_user_stocks(self):
       self.db.add_all([
