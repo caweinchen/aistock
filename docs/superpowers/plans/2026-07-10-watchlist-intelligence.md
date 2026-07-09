@@ -49,7 +49,7 @@
   - `sort_watchlist_insights(insights, mode: WatchlistSortMode) -> list[WatchlistStockInsightResult]`
   - dataclasses `WatchlistStockInsightResult`, `WatchlistRadarResult`, `WatchlistObservationResult`, `WatchlistIntelligenceResult`
 
-- [ ] **Step 1: Add failing rule tests**
+- [x] **Step 1: Add failing rule tests**
 
 Create `backend/tests/test_watchlist_intelligence.py`:
 
@@ -129,7 +129,7 @@ if __name__ == "__main__":
     unittest.main()
 ```
 
-- [ ] **Step 2: Run failing tests**
+- [x] **Step 2: Run failing tests**
 
 Run:
 
@@ -139,7 +139,7 @@ python -m pytest backend/tests/test_watchlist_intelligence.py -q
 
 Expected: fails because `backend.app.watchlist_intelligence` does not exist.
 
-- [ ] **Step 3: Implement the rule module**
+- [x] **Step 3: Implement the rule module**
 
 Create `backend/app/watchlist_intelligence.py`:
 
@@ -365,7 +365,7 @@ def sort_watchlist_insights(insights, mode: WatchlistSortMode) -> list[Watchlist
     return sorted(items, key=lambda item: (item.priority_score, -item.risk_score), reverse=True)
 ```
 
-- [ ] **Step 4: Run rule tests**
+- [x] **Step 4: Run rule tests**
 
 Run:
 
@@ -375,7 +375,7 @@ python -m pytest backend/tests/test_watchlist_intelligence.py -q
 
 Expected: 2 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add backend/app/watchlist_intelligence.py backend/tests/test_watchlist_intelligence.py docs/superpowers/plans/2026-07-10-watchlist-intelligence.md
@@ -1101,4 +1101,3 @@ This plan contains no TBD placeholders. Every task has concrete files, interface
 - Backend `WatchlistStockInsightResult.focus_level` maps to frontend `WatchlistStockInsight.focus_level`.
 - Backend `WatchlistObservationResult.stock_codes` maps to frontend `WatchlistObservation.stock_codes`.
 - `WatchlistInsights.intelligence` is optional on both backend and frontend.
-
