@@ -22,7 +22,7 @@
 ## TODO Tracking
 
 - [x] Task 1: Add structural route tests
-- [ ] Task 2: Extract API schemas
+- [x] Task 2: Extract API schemas
 - [ ] Task 3: Extract stock summary helpers
 - [ ] Task 4: Extract auth router
 - [ ] Task 5: Extract watchlist router
@@ -107,7 +107,7 @@ git commit -m "test: cover auth and watchlist route registration"
 - Produces: all API schema names currently used by `main.py`, `routers/auth.py`, and `routers/watchlist.py`.
 - Keeps names unchanged: `StockSummary`, `WatchlistInsights`, `LoginRequest`, `LoginResponse`, `UserResponse`, `Signal`, `ReferenceStatus`, `DataCompleteness`, and related models.
 
-- [ ] **Step 1: Move schema definitions**
+- [x] **Step 1: Move schema definitions**
 
 Create `backend/app/schemas.py` by moving these definitions out of `main.py` unchanged:
 
@@ -133,7 +133,7 @@ StrategyTemplate = Literal["trend-breakout", "low-valuation-reversal", "dividend
 
 Then include the existing `BaseModel` classes from `main.py` in the same file.
 
-- [ ] **Step 2: Import schemas in `main.py`**
+- [x] **Step 2: Import schemas in `main.py`**
 
 In `backend/app/main.py`, replace local schema/type definitions with:
 
@@ -182,7 +182,7 @@ from app.schemas import (
 
 Remove now-unused `BaseModel`, `Field`, and `Literal` imports from `main.py` if no longer needed there.
 
-- [ ] **Step 3: Run schema-dependent tests**
+- [x] **Step 3: Run schema-dependent tests**
 
 Run:
 
@@ -192,7 +192,7 @@ python -m pytest backend/tests/test_user_admin_and_watchlist.py backend/tests/te
 
 Expected: all selected tests pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add backend/app/schemas.py backend/app/main.py docs/superpowers/plans/2026-07-10-backend-main-decomposition.md
