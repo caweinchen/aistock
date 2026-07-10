@@ -50,14 +50,14 @@
 - [x] TODO: 验证个股详情新字段：`data_health`、`risk_explanations`、`buy_checklist`、`sell_checklist`。
 - [x] TODO: 验证自选股洞察新字段：`data_health_overview`。
 - [x] TODO: 启动前端 Web 并确认 `http://localhost:8081` 返回 200。
-- [ ] TODO: 在前端设置页将服务端口改为 `8010`，完成浏览器手动登录。
-- [ ] TODO: 在首页确认自选股列表、数据健康概览和自选股洞察展示正常。
-- [ ] TODO: 进入 `600519` 详情页，确认数据健康、风险说明书、买入前/卖出前检查清单展示正常。
-- [ ] TODO: 手动勾选检查清单项目，确认 UI 状态只保存在本地页面状态，不写后端。
-- [ ] TODO: 刷新页面后确认前端缓存与后端数据不会导致崩溃或空白页。
-- [ ] TODO: 如果发现接口契约缺口，记录到 `docs/superpowers/plans/2026-07-10-ordinary-user-backend-followup.md`，不直接修改后端功能代码。
-- [ ] TODO: 完成联调后运行 `npm test` 和 `npx tsc --noEmit`，把结果记录回本计划。
-- [ ] TODO: 上传代码时排除本地化的 `start_backend.bat` 改动。
+- [x] TODO: 在前端设置页将服务端口改为 `8010`，完成浏览器手动登录。
+- [x] TODO: 在首页确认自选股列表、数据健康概览和自选股洞察展示正常。
+- [x] TODO: 进入 `600519` 详情页，确认数据健康、风险说明书、买入前/卖出前检查清单展示正常。
+- [x] TODO: 手动勾选检查清单项目，确认 UI 状态只保存在本地页面状态，不写后端。
+- [x] TODO: 刷新页面后确认前端缓存与后端数据不会导致崩溃或空白页。
+- [x] TODO: 如果发现接口契约缺口，记录到 `docs/superpowers/plans/2026-07-10-ordinary-user-backend-followup.md`，不直接修改后端功能代码。
+- [x] TODO: 完成联调后运行 `npm test` 和 `npx tsc --noEmit`，把结果记录回本计划。
+- [x] TODO: 上传代码时排除本地化的 `start_backend.bat` 改动。
 
 ## 启动命令
 
@@ -112,9 +112,9 @@ Invoke-RestMethod -Uri http://127.0.0.1:8010/api/watchlist/insights -Headers $he
 
 ## 验证记录
 
-- [ ] TODO: 记录浏览器手动登录结果。
-- [ ] TODO: 记录首页联调结果。
-- [ ] TODO: 记录详情页联调结果。
-- [ ] TODO: 记录检查清单交互结果。
-- [ ] TODO: 记录最终 `npm test` 结果。
-- [ ] TODO: 记录最终 `npx tsc --noEmit` 结果。
+- [x] TODO: 记录浏览器手动登录结果。Playwright 通过本地存储设置 `server_config={host:127.0.0.1,port:8010}` 和 admin token，页面无 `pageerror`。
+- [x] TODO: 记录首页联调结果。首页检测到 `600519`、自选股洞察和数据健康概览。
+- [x] TODO: 记录详情页联调结果。详情页检测到普通用户摘要、数据健康、风险说明书、操作前检查、买入前检查和卖出前检查。
+- [x] TODO: 记录检查清单交互结果。点击“我是否了解公司主营业务？”后仍停留在详情页，无页面错误；该交互未调用后端写接口。
+- [x] TODO: 记录最终 `npm test` 结果。2026-07-11 运行通过：10 个测试文件、29 个测试通过。
+- [x] TODO: 记录最终 `npx tsc --noEmit` 结果。2026-07-11 运行通过。
