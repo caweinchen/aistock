@@ -38,6 +38,80 @@ export function debugAuthToken(): string | null {
   return getAuthToken();
 }
 
+function normalizeStockDetail(detail: StockDetail): StockDetail {
+  const dataHealth = detail.data_health ?? {
+    completeness: detail.data_completeness ?? 'insufficient',
+    updated_at: detail.data_updated_at ?? detail.updated_at ?? null,
+    source_summary: [],
+    missing_items: detail.data_completeness === 'complete' || detail.data_completeness === 'mostly_complete' ? [] : ['关键补充数据'],
+    downgrade_reasons: detail.data_completeness === 'complete' || detail.data_completeness === 'mostly_complete' ? [] : ['部分数据暂不可用，结论仅作基础参考'],
+    user_message: detail.data_completeness === 'complete' || detail.data_completeness === 'mostly_complete'
+      ? '当前数据可用于基础参考。'
+      : '当前数据不完整，请结合缺失项谨慎解读。',
+  };
+
+  const riskExplanations = detail.risk_explanations ?? (detail.risk_factors ?? []).map((risk, index) => ({
+    type: 'data_quality' as const,
+    level: 'medium' as const,
+    title: risk,
+    what_it_means: risk,
+    why_it_matters: '该风险因素可能影响普通用户摘要和策略参考的稳定性。',
+    evidence: detail.support_factors?.length ? detail.support_factors.slice(0, 2) : [`风险因素 ${index + 1}`],
+  }));
+
+  return {
+    ...detail,
+    data_health: dataHealth,
+    risk_explanations: riskExplanations,
+    buy_checklist: detail.buy_checklist ?? null,
+    sell_checklist: detail.sell_checklist ?? null,
+  };
+}
+
+function normalizeWatchlistInsights(insights: WatchlistInsights): WatchlistInsights {
+  if (insights.data_health_overview) {
+    return insights;
+  }
+
+  const groups = insights.groups ?? {
+    positive: [],
+    watch: [],
+    cautious: [],
+    insufficient_data: [],
+  };
+  const allStocks = [
+    ...(groups.positive ?? []),
+    ...(groups.watch ?? []),
+    ...(groups.cautious ?? []),
+    ...(groups.insufficient_data ?? []),
+  ];
+  const insufficientCount = allStocks.filter((stock) => (
+    stock.data_completeness === 'insufficient'
+    || (!stock.data_completeness && groups.insufficient_data?.some((item) => item.code === stock.code))
+  )).length;
+  const incompleteCount = allStocks.filter((stock) => (
+    stock.data_completeness === 'incomplete' || stock.data_completeness === 'mostly_complete'
+  )).length;
+  const latestUpdatedAt = allStocks
+    .map((stock) => stock.data_updated_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1) ?? insights.data_updated_at ?? null;
+
+  return {
+    ...insights,
+    data_health_overview: {
+      total: insights.total,
+      insufficient_count: insufficientCount,
+      incomplete_count: incompleteCount,
+      latest_updated_at: latestUpdatedAt,
+      message: insufficientCount > 0 || incompleteCount > 0
+        ? '部分自选股数据仍需补齐，请优先查看详情页依据。'
+        : '当前自选股数据健康状态可用于基础参考。',
+    },
+  };
+}
+
 async function cacheStrategyDetailsForStock(code: string, detail: StockDetail): Promise<void> {
   await Promise.allSettled(
     detail.strategies.map(async (strategy) => {
@@ -146,7 +220,8 @@ export async function getWatchlistInsights(): Promise<WatchlistInsights> {
     headers: getAuthHeaders(),
   });
   if (!response.ok) throw new Error('fetchWatchlistInsights');
-  return response.json() as Promise<WatchlistInsights>;
+  const data: WatchlistInsights = await response.json();
+  return normalizeWatchlistInsights(data);
 }
 
 // ============================================
@@ -157,7 +232,7 @@ export async function getStockDetail(code: string, forceRefresh = false): Promis
   if (!forceRefresh) {
     const cached = await localDb.getStockDetail(code);
     if (cached && cached.updated_at) {
-      return { data: cached, fromCache: true };
+      return { data: normalizeStockDetail(cached), fromCache: true };
     }
   }
 
@@ -171,7 +246,7 @@ export async function getStockDetail(code: string, forceRefresh = false): Promis
     }
     
     if (!response.ok) throw new Error('fetchStockDetail');
-    const data: StockDetail = await response.json();
+    const data = normalizeStockDetail(await response.json() as StockDetail);
     
     await localDb.saveStockDetail(code, data);
     await cacheStrategyDetailsForStock(code, data);
@@ -180,7 +255,7 @@ export async function getStockDetail(code: string, forceRefresh = false): Promis
     const cached = await localDb.getStockDetail(code);
     if (cached) {
       const isNetworkError = isNetworkFailure(err);
-      return { data: cached, fromCache: true, error: isNetworkError ? 'Offline - showing cached data' : 'Server error - showing cached data', isOffline: isNetworkError };
+      return { data: normalizeStockDetail(cached), fromCache: true, error: isNetworkError ? 'Offline - showing cached data' : 'Server error - showing cached data', isOffline: isNetworkError };
     }
     throw err;
   }

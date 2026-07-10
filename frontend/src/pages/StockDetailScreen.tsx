@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeft, AlertTriangle, Sparkles, TrendingUp, TrendingDown, RefreshCcw } from 'lucide-react-native';
+import { ArrowLeft, AlertTriangle, Sparkles, TrendingUp, TrendingDown, RefreshCcw, CheckCircle2, Circle } from 'lucide-react-native';
 import { FactorTile } from '../components/FactorTile';
 import { StrategyCard } from '../components/StrategyCard';
 import { AlertCard } from '../components/AlertCard';
@@ -37,6 +37,7 @@ export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchS
   const [news, setNews] = useState<StockNews[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [activeChecklistMode, setActiveChecklistMode] = useState<'buy' | 'sell'>('buy');
+  const [confirmedChecklistItems, setConfirmedChecklistItems] = useState<Set<string>>(() => new Set());
 
   // Cache-first loading on mount
   useEffect(() => {
@@ -44,6 +45,7 @@ export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchS
     void loadInstHold(false); // cache-first
     void loadDividend(false); // cache-first
     void loadNews(false); // cache-first
+    setConfirmedChecklistItems(new Set());
   }, [stockCode]);
 
   useEffect(() => {
@@ -183,6 +185,19 @@ export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchS
       loadDividend(true),
       loadNews(true),
     ]);
+  };
+
+  const toggleChecklistItem = (mode: 'buy' | 'sell', key: string) => {
+    const itemKey = `${mode}:${key}`;
+    setConfirmedChecklistItems((current) => {
+      const next = new Set(current);
+      if (next.has(itemKey)) {
+        next.delete(itemKey);
+      } else {
+        next.add(itemKey);
+      }
+      return next;
+    });
   };
 
   if (isLoading) {
@@ -375,12 +390,27 @@ export function StockDetailScreen({ stockCode, onBack, onTokenInvalid, researchS
             return (
               <View style={styles.checklistBody}>
                 <Text style={styles.summaryText}>{checklist.completion_hint}</Text>
-                {checklist.items.map((item) => (
-                  <View key={item.key} style={styles.checklistItem}>
-                    <Text style={styles.riskTitle}>{item.label}</Text>
-                    <Text style={styles.reasonText}>{item.explanation}</Text>
-                  </View>
-                ))}
+                {checklist.items.map((item) => {
+                  const itemKey = `${activeChecklistMode}:${item.key}`;
+                  const isConfirmed = confirmedChecklistItems.has(itemKey);
+                  return (
+                    <Pressable
+                      key={item.key}
+                      style={[styles.checklistItem, isConfirmed && styles.checklistItemConfirmed]}
+                      onPress={() => toggleChecklistItem(activeChecklistMode, item.key)}
+                    >
+                      <View style={styles.checklistItemHeader}>
+                        {isConfirmed ? (
+                          <CheckCircle2 size={19} color="#0F8B8D" />
+                        ) : (
+                          <Circle size={19} color="#9CA3AF" />
+                        )}
+                        <Text style={styles.riskTitle}>{item.label}</Text>
+                      </View>
+                      <Text style={styles.reasonText}>{item.explanation}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             );
           })()}
@@ -767,6 +797,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 6,
     padding: 12,
+  },
+  checklistItemConfirmed: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#99F6E4',
+  },
+  checklistItemHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   sectionHeader: { marginTop: 8 },
   sectionTitle: { color: '#162033', fontSize: 18, fontWeight: '800' },

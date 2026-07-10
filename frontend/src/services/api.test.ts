@@ -44,6 +44,21 @@ const detailWithStrategy: StockDetail = {
   strategies: [strategyDetail.strategy],
 };
 
+const normalizedDetail = {
+  ...detail,
+  data_health: {
+    completeness: 'insufficient',
+    updated_at: detail.updated_at,
+    source_summary: [],
+    missing_items: ['关键补充数据'],
+    downgrade_reasons: ['部分数据暂不可用，结论仅作基础参考'],
+    user_message: '当前数据不完整，请结合缺失项谨慎解读。',
+  },
+  risk_explanations: [],
+  buy_checklist: null,
+  sell_checklist: null,
+};
+
 const watchlistInsights: WatchlistInsights = {
   total: 1,
   groups: {
@@ -195,8 +210,8 @@ describe('api cache policy', () => {
     vi.stubGlobal('fetch', fetchSpy);
     const { getStockDetail } = await import('./api');
 
-    await expect(getStockDetail(stock.code)).resolves.toEqual({ data: detail, fromCache: false });
-    expect(saveStockDetail).toHaveBeenCalledWith(stock.code, detail);
+    await expect(getStockDetail(stock.code)).resolves.toEqual({ data: normalizedDetail, fromCache: false });
+    expect(saveStockDetail).toHaveBeenCalledWith(stock.code, normalizedDetail);
   });
 
   it('returns empty secondary sections without fetching when cache is missing', async () => {
@@ -223,7 +238,7 @@ describe('api cache policy', () => {
     vi.stubGlobal('fetch', fetchSpy);
     const { getStockDetail, getStrategyDetail, getStockDividend, getStockNews, getStockInstHold } = await import('./api');
 
-    await expect(getStockDetail(stock.code)).resolves.toEqual({ data: detail, fromCache: true });
+    await expect(getStockDetail(stock.code)).resolves.toEqual({ data: normalizedDetail, fromCache: true });
     await expect(getStrategyDetail(stock.code, 'trend')).resolves.toEqual({ data: strategyDetail, fromCache: true });
     await expect(getStockDividend(stock.code)).resolves.toEqual({ data: dividend, fromCache: true });
     await expect(getStockNews(stock.code)).resolves.toEqual({ data: news, fromCache: true });
@@ -268,6 +283,65 @@ describe('api cache policy', () => {
     );
   });
 
+  it('normalizes watchlist insight data health when the server omits the new overview field', async () => {
+    mockLocalDb();
+    const legacyInsights: WatchlistInsights = {
+      ...watchlistInsights,
+      data_health_overview: undefined,
+      groups: {
+        positive: [{ ...stock, data_completeness: 'complete', data_updated_at: '2026-07-08T10:00:00' }],
+        watch: [{ ...stock, code: '000002.SZ', data_completeness: 'mostly_complete', data_updated_at: '2026-07-09T10:00:00' }],
+        cautious: [{ ...stock, code: '000003.SZ', data_completeness: 'incomplete' }],
+        insufficient_data: [{ ...stock, code: '000004.SZ', data_completeness: 'insufficient' }],
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => legacyInsights })));
+    const { getWatchlistInsights } = await import('./api');
+
+    const result = await getWatchlistInsights();
+
+    expect(result.data_health_overview).toEqual({
+      total: 1,
+      insufficient_count: 1,
+      incomplete_count: 2,
+      latest_updated_at: '2026-07-09T10:00:00',
+      message: '部分自选股数据仍需补齐，请优先查看详情页依据。',
+    });
+  });
+
+  it('normalizes legacy stock detail risk fields from cache', async () => {
+    const cachedDetail: StockDetail = {
+      ...detail,
+      data_completeness: 'mostly_complete',
+      data_updated_at: '2026-07-09T10:00:00',
+      support_factors: ['收入保持增长'],
+      risk_factors: ['波动率偏高'],
+    };
+    mockLocalDb({
+      getStockDetail: vi.fn(async () => cachedDetail),
+    });
+    vi.stubGlobal('fetch', vi.fn());
+    const { getStockDetail } = await import('./api');
+
+    const result = await getStockDetail(stock.code);
+
+    expect(result.data?.data_health).toMatchObject({
+      completeness: 'mostly_complete',
+      updated_at: '2026-07-09T10:00:00',
+      user_message: '当前数据可用于基础参考。',
+    });
+    expect(result.data?.risk_explanations).toEqual([
+      {
+        type: 'data_quality',
+        level: 'medium',
+        title: '波动率偏高',
+        what_it_means: '波动率偏高',
+        why_it_matters: '该风险因素可能影响普通用户摘要和策略参考的稳定性。',
+        evidence: ['收入保持增长'],
+      },
+    ]);
+  });
+
   it('marks refresh as offline when React Native reports Network request failed', async () => {
     mockLocalDb({
       getStocks: vi.fn(async () => [stock]),
@@ -301,7 +375,13 @@ describe('api cache policy', () => {
     vi.stubGlobal('fetch', fetchSpy);
     const { getStockDetail } = await import('./api');
 
-    await expect(getStockDetail(stock.code, true)).resolves.toEqual({ data: detailWithStrategy, fromCache: false });
+    await expect(getStockDetail(stock.code, true)).resolves.toEqual({
+      data: {
+        ...normalizedDetail,
+        strategies: [strategyDetail.strategy],
+      },
+      fromCache: false,
+    });
 
     expect(fetchSpy).toHaveBeenCalledWith(
       `http://server.test/api/stocks/${stock.code}/strategies/${strategyDetail.strategy.id}`,
