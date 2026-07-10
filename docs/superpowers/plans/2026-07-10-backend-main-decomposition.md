@@ -24,7 +24,7 @@
 - [x] Task 1: Add structural route tests
 - [x] Task 2: Extract API schemas
 - [x] Task 3: Extract stock summary helpers
-- [ ] Task 4: Extract auth router
+- [x] Task 4: Extract auth router
 - [ ] Task 5: Extract watchlist router
 - [ ] Task 6: Verify, update docs, and record completion
 
@@ -273,7 +273,7 @@ git commit -m "refactor: extract stock summary helpers from main"
 - Produces dependencies: `get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User`, `get_admin_user(user: User = Depends(get_current_user)) -> User`
 - Consumes schemas from `app.schemas`.
 
-- [ ] **Step 1: Create router package and auth router**
+- [x] **Step 1: Create router package and auth router**
 
 Create `backend/app/routers/__init__.py` as an empty package marker.
 
@@ -308,7 +308,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=Fals
 
 For moved decorators, replace `@app.get("/api/auth/public-key")` with `@router.get("/public-key")`, and similarly remove the `/api/auth` prefix from other auth paths.
 
-- [ ] **Step 2: Register auth router**
+- [x] **Step 2: Register auth router**
 
 In `backend/app/main.py`, import:
 
@@ -324,17 +324,17 @@ app.include_router(auth_router)
 
 Remove the moved auth route definitions from `main.py`.
 
-- [ ] **Step 3: Run auth and route tests**
+- [x] **Step 3: Run auth and route tests**
 
 Run:
 
 ```powershell
-python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTests::test_auth_and_watchlist_routes_remain_registered backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTests::test_user_login_and_admin_listing -q
+python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTests::test_auth_and_watchlist_routes_remain_registered backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTests::test_registered_user_is_inactive_and_cannot_login_until_admin_enables backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWatchlistTests::test_only_admin_can_manage_users_and_change_roles -q
 ```
 
 Expected: selected tests pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add backend/app/main.py backend/app/routers/__init__.py backend/app/routers/auth.py docs/superpowers/plans/2026-07-10-backend-main-decomposition.md
