@@ -23,7 +23,7 @@
 
 - [x] Task 1: Add structural route tests
 - [x] Task 2: Extract API schemas
-- [ ] Task 3: Extract stock summary helpers
+- [x] Task 3: Extract stock summary helpers
 - [ ] Task 4: Extract auth router
 - [ ] Task 5: Extract watchlist router
 - [ ] Task 6: Verify, update docs, and record completion
@@ -212,7 +212,7 @@ git commit -m "refactor: extract api schemas from main"
 - Produces: `determine_data_completeness(...)`, `determine_reference_status(...)`, `reference_label(...)`, `build_primary_support(...)`, `build_primary_risk(...)`
 - Consumes: schemas from `app.schemas`.
 
-- [ ] **Step 1: Create helper module**
+- [x] **Step 1: Create helper module**
 
 Create `backend/app/stock_summary.py` and move these pure helper functions out of `main.py` unchanged:
 
@@ -225,7 +225,7 @@ Create `backend/app/stock_summary.py` and move these pure helper functions out o
 
 Import required schema names from `app.schemas` and database model classes only for type hints.
 
-- [ ] **Step 2: Import helpers in `main.py`**
+- [x] **Step 2: Import helpers in `main.py`**
 
 In `backend/app/main.py`, import:
 
@@ -242,7 +242,7 @@ from app.stock_summary import (
 
 Remove the moved function definitions from `main.py`.
 
-- [ ] **Step 3: Run stock summary dependent tests**
+- [x] **Step 3: Run stock summary dependent tests**
 
 Run:
 
@@ -252,7 +252,7 @@ python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWat
 
 Expected: selected tests pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add backend/app/stock_summary.py backend/app/main.py docs/superpowers/plans/2026-07-10-backend-main-decomposition.md
