@@ -25,7 +25,7 @@
 - [x] Task 2: Extract API schemas
 - [x] Task 3: Extract stock summary helpers
 - [x] Task 4: Extract auth router
-- [ ] Task 5: Extract watchlist router
+- [x] Task 5: Extract watchlist router
 - [ ] Task 6: Verify, update docs, and record completion
 
 ---
@@ -354,7 +354,7 @@ git commit -m "refactor: extract auth router from main"
 - Consumes: `get_current_user` from `app.routers.auth`
 - Consumes schema and helper functions moved or imported from `main.py`.
 
-- [ ] **Step 1: Create watchlist router**
+- [x] **Step 1: Create watchlist router**
 
 Create `backend/app/routers/watchlist.py` and move these routes from `main.py`:
 
@@ -387,7 +387,7 @@ from app.stock_summary import stock_to_summary
 
 Move `watchlist_intelligence_to_model` into `routers/watchlist.py` with the route because it is only used there after extraction.
 
-- [ ] **Step 2: Register watchlist router**
+- [x] **Step 2: Register watchlist router**
 
 In `backend/app/main.py`, import:
 
@@ -403,7 +403,7 @@ app.include_router(watchlist_router)
 
 Remove the moved watchlist route definitions from `main.py`.
 
-- [ ] **Step 3: Run watchlist tests**
+- [x] **Step 3: Run watchlist tests**
 
 Run:
 
@@ -413,7 +413,7 @@ python -m pytest backend/tests/test_user_admin_and_watchlist.py::UserAdminAndWat
 
 Expected: selected tests pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add backend/app/main.py backend/app/routers/watchlist.py docs/superpowers/plans/2026-07-10-backend-main-decomposition.md
