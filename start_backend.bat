@@ -2,7 +2,7 @@
 setlocal
 
 set PORT=8000
-set VENV_DIR=.venv
+set VENV_DIR=D:\CodexCode\AIStock-new\.venv
 set BACKEND_DIR=backend
 
 echo ============================================

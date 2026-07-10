@@ -3,9 +3,12 @@ TuShare 数据服务层
 提供股票行情数据接口
 """
 import tushare as ts
+import json
 from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 import logging
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +88,12 @@ class TuShareService:
             else:
                 # 免费版使用旧接口
                 symbol = ts_code.split('.')[0]
-                df = ts.get_k_data(symbol, start=start_date[:4]+'-'+start_date[4:6]+'-'+start_date[6:],
-                                   end=end_date[:4]+'-'+end_date[4:6]+'-'+end_date[6:])
+                try:
+                    df = ts.get_k_data(symbol, start=start_date[:4]+'-'+start_date[4:6]+'-'+start_date[6:],
+                                       end=end_date[:4]+'-'+end_date[4:6]+'-'+end_date[6:])
+                except Exception as exc:
+                    logger.warning("Legacy TuShare daily API failed, falling back to EastMoney: %s", exc)
+                    return self._get_eastmoney_daily_price(ts_code, start_date, end_date)
 
             if df is not None and not df.empty:
                 return df.to_dict('records')
@@ -94,6 +101,38 @@ class TuShareService:
         except Exception as e:
             logger.error(f"获取日线行情失败: {e}")
             return []
+
+    def _get_eastmoney_daily_price(self, ts_code: str, start_date: str, end_date: str) -> List[Dict]:
+        symbol = ts_code.split('.')[0]
+        market_id = "1" if ts_code.endswith(".SH") or symbol.startswith(("5", "6", "9")) else "0"
+        query = urlencode({
+            "secid": f"{market_id}.{symbol}",
+            "fields1": "f1,f2,f3,f4,f5,f6",
+            "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+            "klt": "101",
+            "fqt": "1",
+            "beg": start_date,
+            "end": end_date,
+        })
+        url = f"https://push2his.eastmoney.com/api/qt/stock/kline/get?{query}"
+
+        with urlopen(url, timeout=15) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        rows = []
+        for line in (payload.get("data") or {}).get("klines") or []:
+            fields = line.split(",")
+            if len(fields) < 6:
+                continue
+            rows.append({
+                "date": fields[0],
+                "open": _to_float(fields[1]),
+                "close": _to_float(fields[2]),
+                "high": _to_float(fields[3]),
+                "low": _to_float(fields[4]),
+                "volume": int(_to_float(fields[5])),
+            })
+        return rows
 
     def get_realtime_quote(self, ts_code: str) -> Optional[Dict]:
         """
@@ -586,3 +625,10 @@ def init_tushare(token: str = None):
     global _tushare_service
     _tushare_service = TuShareService(token)
     return _tushare_service
+
+
+def _to_float(value) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0

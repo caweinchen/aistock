@@ -43,8 +43,8 @@ class StockTsCodeRouteTests(unittest.TestCase):
     def test_dividend_route_uses_ts_code_fallback_when_database_value_is_empty(self):
         self.service.get_dividend.return_value = []
 
-        with patch("backend.app.main.tushare_config.enabled", True), patch(
-            "backend.app.main.get_tushare_service", return_value=self.service
+        with patch("app.routers.stocks.tushare_config.enabled", True), patch(
+            "app.routers.stocks.get_tushare_service", return_value=self.service
         ):
             get_stock_dividend("600519", self.db, self.user)
 
@@ -53,8 +53,8 @@ class StockTsCodeRouteTests(unittest.TestCase):
     def test_news_route_uses_ts_code_fallback_when_database_value_is_empty(self):
         self.service.get_stock_news.return_value = []
 
-        with patch("backend.app.main.tushare_config.enabled", True), patch(
-            "backend.app.main.get_tushare_service", return_value=self.service
+        with patch("app.routers.stocks.tushare_config.enabled", True), patch(
+            "app.routers.stocks.get_tushare_service", return_value=self.service
         ):
             get_stock_news("600519", self.db, self.user)
 
@@ -63,8 +63,8 @@ class StockTsCodeRouteTests(unittest.TestCase):
     def test_adj_factor_route_uses_ts_code_fallback_when_database_value_is_empty(self):
         self.service.get_adj_factor.return_value = []
 
-        with patch("backend.app.main.tushare_config.enabled", True), patch(
-            "backend.app.main.get_tushare_service", return_value=self.service
+        with patch("app.routers.stocks.tushare_config.enabled", True), patch(
+            "app.routers.stocks.get_tushare_service", return_value=self.service
         ):
             get_stock_adj_factor("600519", self.db, self.user)
 
@@ -73,8 +73,8 @@ class StockTsCodeRouteTests(unittest.TestCase):
     def test_inst_hold_route_uses_ts_code_fallback_when_database_value_is_empty(self):
         self.service.get_inst_hold.return_value = []
 
-        with patch("backend.app.main.tushare_config.enabled", True), patch(
-            "backend.app.main.get_tushare_service", return_value=self.service
+        with patch("app.routers.stocks.tushare_config.enabled", True), patch(
+            "app.routers.stocks.get_tushare_service", return_value=self.service
         ):
             get_stock_inst_hold("600519", self.db, self.user)
 
@@ -88,8 +88,8 @@ class StockTsCodeRouteTests(unittest.TestCase):
             "message": "每分钟最多访问该接口1次",
         }
 
-        with patch("backend.app.main.tushare_config.enabled", True), patch(
-            "backend.app.main.get_tushare_service", return_value=self.service
+        with patch("app.routers.stocks.tushare_config.enabled", True), patch(
+            "app.routers.stocks.get_tushare_service", return_value=self.service
         ):
             with self.assertRaises(HTTPException) as raised:
                 get_stock_dividend("600519", self.db, self.user)
@@ -119,6 +119,37 @@ class TuShareServiceApiNameTests(unittest.TestCase):
         service.pro.news.assert_called_once()
         self.assertEqual(news[0]["ts_code"], "000001.SZ")
         self.assertEqual(news[0]["pub_time"], "2024-01-02 09:30:00")
+
+    def test_daily_price_free_mode_falls_back_when_legacy_tushare_breaks(self):
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def read(self):
+                return (
+                    b'{"data":{"klines":["2026-07-10,36.55,36.88,37.01,36.40,123456,0,0,0,0,0"]}}'
+                )
+
+        service = TuShareService()
+
+        with patch("backend.app.tushare_service.ts.get_k_data", side_effect=AttributeError("'DataFrame' object has no attribute 'append'")), patch(
+            "backend.app.tushare_service.urlopen",
+            return_value=FakeResponse(),
+            create=True,
+        ):
+            rows = service.get_daily_price("600036.SH", start_date="20260703", end_date="20260710")
+
+        self.assertEqual(rows, [{
+            "date": "2026-07-10",
+            "open": 36.55,
+            "close": 36.88,
+            "high": 37.01,
+            "low": 36.4,
+            "volume": 123456,
+        }])
 
     def test_inst_hold_uses_top10_holders_api(self):
         service = TuShareService()

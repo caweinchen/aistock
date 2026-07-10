@@ -134,10 +134,10 @@ python -m pytest backend/tests -q
 ## 8. TODO 跟踪
 
 - [x] 第一轮：拆出 `schemas.py`、`stock_summary.py`、`routers/auth.py`、`routers/watchlist.py`
-- [ ] 第二轮：拆出股票详情和股票数据查询 router
-- [ ] 第三轮：拆出数据刷新和数据源状态 router
-- [ ] 第四轮：拆出 backtest router
-- [ ] 第五轮：拆出 admin router
+- [x] 第二轮：拆出股票详情和股票数据查询 router
+- [x] 第三轮：拆出数据刷新和数据源状态 router
+- [x] 第四轮：拆出 backtest router
+- [x] 第五轮：拆出 admin router
 - [ ] 第六轮：将复杂装配逻辑迁移到 service/assembler 层
 - [ ] 长期：`main.py` 控制在 app 装配文件规模，不再承载业务路由新增
 

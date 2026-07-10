@@ -305,6 +305,27 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
           ("/api/watchlist/insights", "GET"),
           ("/api/watchlist/{code}", "POST"),
           ("/api/watchlist/{code}", "DELETE"),
+          ("/api/stocks", "GET"),
+          ("/api/stocks/refresh-all", "GET"),
+          ("/api/stocks/search", "GET"),
+          ("/api/stocks/{code}", "GET"),
+          ("/api/stocks/{code}/strategies", "GET"),
+          ("/api/stocks/{code}/strategies/{strategy_id}", "GET"),
+          ("/api/stocks/{code}/history", "GET"),
+          ("/api/stocks/{code}/realtime", "GET"),
+          ("/api/stocks/{code}/dividend", "GET"),
+          ("/api/stocks/{code}/news", "GET"),
+          ("/api/stocks/{code}/adj-factor", "GET"),
+          ("/api/stocks/{code}/inst-hold", "GET"),
+          ("/api/stocks/{code}/refresh", "GET"),
+          ("/api/stocks/{code}/factors", "GET"),
+          ("/api/stocks/{code}/alerts", "GET"),
+          ("/api/tushare/status", "GET"),
+          ("/api/eastmoney/status", "GET"),
+          ("/api/eastmoney/refresh/{code}", "GET"),
+          ("/api/backtests", "POST"),
+          ("/api/admin/users", "GET"),
+          ("/api/admin/users/{user_id}", "PATCH"),
       }
 
       self.assertTrue(expected.issubset(routes))
@@ -383,7 +404,7 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
               return daily_data
 
       fake_tushare = FakeTuShare()
-      with patch("app.main.tushare_config.token", ""), patch("app.main.get_tushare_service", return_value=fake_tushare):
+      with patch("app.routers.stocks.tushare_config.token", ""), patch("app.routers.stocks.get_tushare_service", return_value=fake_tushare):
           detail_response = self.client.get(
               "/api/stocks/601398",
               headers={"Authorization": f"Bearer {alice_token}"},
@@ -414,7 +435,7 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
           def get_daily_price(self, ts_code, start_date, end_date):
               return []
 
-      with patch("app.main.tushare_config.token", ""), patch("app.main.get_tushare_service", return_value=EmptyTuShare()):
+      with patch("app.routers.stocks.tushare_config.token", ""), patch("app.routers.stocks.get_tushare_service", return_value=EmptyTuShare()):
           detail_response = self.client.get(
               "/api/stocks/601398",
               headers={"Authorization": f"Bearer {alice_token}"},
@@ -457,9 +478,9 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
                   for day in range(1, 32)
               ]
 
-      with patch("app.main.tushare_config.token", "configured-token"), \
-          patch("app.main.get_tushare_service", return_value=NoProTuShare()), \
-          patch("app.main.init_tushare", return_value=ProTuShare()) as init_tushare_mock:
+      with patch("app.routers.stocks.tushare_config.token", "configured-token"), \
+          patch("app.routers.stocks.get_tushare_service", return_value=NoProTuShare()), \
+          patch("app.routers.stocks.init_tushare", return_value=ProTuShare()) as init_tushare_mock:
           detail_response = self.client.get(
               "/api/stocks/601398",
               headers={"Authorization": f"Bearer {alice_token}"},
@@ -518,9 +539,9 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
 
       fake_tushare = FakeTuShare()
       alice_token = self._login("alice", "Alice@123!")
-      with patch("app.main.tushare_config.token", ""), \
-          patch("app.routers.watchlist.get_eastmoney_service", return_value=FakeEastMoney()), \
-          patch("app.main.get_tushare_service", return_value=fake_tushare):
+      with patch("app.routers.stocks.tushare_config.token", ""), \
+          patch("app.routers.stocks.get_eastmoney_service", return_value=FakeEastMoney()), \
+          patch("app.routers.stocks.get_tushare_service", return_value=fake_tushare):
           refresh_response = self.client.get(
               "/api/stocks/refresh-all",
               headers={"Authorization": f"Bearer {alice_token}"},

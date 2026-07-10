@@ -192,8 +192,8 @@ class BacktestApiConversionTests(unittest.TestCase):
             {"trade_date": "20240101", "close": 10.0, "vol": 1000},
         ]
 
-        with patch("backend.app.main.tushare_config.enabled", True), patch(
-            "backend.app.main.get_tushare_service", return_value=tushare
+        with patch("app.routers.stocks.tushare_config.enabled", True), patch(
+            "app.routers.stocks.get_tushare_service", return_value=tushare
         ):
             history = ensure_price_history(db, stock)
 
@@ -214,8 +214,8 @@ class BacktestApiConversionTests(unittest.TestCase):
         )]
         stock = Mock(updated_at=datetime(2024, 1, 2, 7, 1, tzinfo=timezone.utc))
 
-        with patch("backend.app.main._is_trading_time", return_value=False), patch(
-            "backend.app.main._last_market_session_end_time",
+        with patch("app.routers.stocks._is_trading_time", return_value=False), patch(
+            "app.routers.stocks._last_market_session_end_time",
             return_value=datetime(2024, 1, 2, 15, 0),
         ):
             self.assertFalse(_history_needs_refresh(history, stock))
@@ -232,8 +232,8 @@ class BacktestApiConversionTests(unittest.TestCase):
         )]
         stock = Mock(updated_at=datetime(2024, 1, 2, 3, 31, tzinfo=timezone.utc))
 
-        with patch("backend.app.main._is_trading_time", return_value=False), patch(
-            "backend.app.main._last_market_session_end_time",
+        with patch("app.routers.stocks._is_trading_time", return_value=False), patch(
+            "app.routers.stocks._last_market_session_end_time",
             return_value=datetime(2024, 1, 2, 11, 30),
         ):
             self.assertFalse(_history_needs_refresh(history, stock))
@@ -250,13 +250,31 @@ class BacktestApiConversionTests(unittest.TestCase):
         )]
         stock = Mock(updated_at=datetime.now(timezone.utc) - timedelta(minutes=4))
 
-        with patch("backend.app.main._is_trading_time", return_value=True):
+        with patch("app.routers.stocks._is_trading_time", return_value=True):
             self.assertFalse(_history_needs_refresh(history, stock))
+
+    def test_history_refreshes_when_latest_price_date_lags_completed_session(self):
+        history = [PricePointDB(
+            stock_code="600036",
+            date="2026-07-03",
+            open=36.0,
+            high=37.0,
+            low=35.8,
+            close=36.83,
+            volume=1000,
+        )]
+        stock = Mock(updated_at=datetime(2026, 7, 10, 13, 6, 2, tzinfo=timezone.utc))
+
+        with patch("app.routers.stocks._is_trading_time", return_value=False), patch(
+            "app.routers.stocks._last_market_session_end_time",
+            return_value=datetime(2026, 7, 10, 15, 0),
+        ):
+            self.assertTrue(_history_needs_refresh(history, stock))
 
     def test_history_refresh_decision_does_not_call_tushare_calendar_when_history_exists(self):
         history = [PricePointDB(
             stock_code="600519",
-            date="2026-07-03",
+            date="2026-07-04",
             open=1190.0,
             high=1200.0,
             low=1188.0,
@@ -265,11 +283,11 @@ class BacktestApiConversionTests(unittest.TestCase):
         )]
         stock = Mock(updated_at=datetime(2026, 7, 4, 19, 41, 32))
 
-        with patch("backend.app.main._is_trading_time", return_value=False), patch(
-            "backend.app.main._last_market_session_end_time",
+        with patch("app.routers.stocks._is_trading_time", return_value=False), patch(
+            "app.routers.stocks._last_market_session_end_time",
             return_value=datetime(2026, 7, 4, 15, 0),
         ), patch(
-            "backend.app.main.get_initialized_tushare_service",
+            "app.routers.stocks.get_initialized_tushare_service",
             side_effect=AssertionError("refresh decision should not call TuShare calendar"),
         ):
             self.assertFalse(_history_needs_refresh(history, stock))
