@@ -1,7 +1,6 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import logging
 import re
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -40,26 +39,26 @@ from app.stock_summary import (
 )
 from app.tushare_service import get_tushare_service, init_tushare
 from app.stock_detail_assembler import StockDetailOperations, assemble_stock_detail
+from app.stock_data_service import (
+    StockDataOperations,
+    ensure_price_history as service_ensure_price_history,
+    get_price_history as service_get_price_history,
+    history_needs_refresh as service_history_needs_refresh,
+    is_morning_break_time as service_is_morning_break_time,
+    is_trading_time as service_is_trading_time,
+    last_market_session_end_time as service_last_market_session_end_time,
+    update_stock_realtime_quote as service_update_stock_realtime_quote,
+)
 
 logger = logging.getLogger("stocks")
-MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
 router = APIRouter(prefix="/api/stocks")
 
 def update_stock_realtime_quote(db: Session, stock: Stock) -> None:
-    try:
-        quotes = get_eastmoney_service().get_realtime_quote([stock.code])
-        if not quotes:
-            return
-        quote = quotes[0]
-        stock.price = quote.get("price", stock.price or 0)
-        stock.change_percent = quote.get("change_percent", stock.change_percent or 0)
-        stock.name = quote.get("name", stock.name)
-        stock.updated_at = datetime.now(timezone.utc)
-        db.commit()
-        db.refresh(stock)
-    except Exception as e:
-        logger.error(f"Failed to update realtime quote for stock {stock.code}: {e}")
-        db.rollback()
+    return service_update_stock_realtime_quote(
+        db,
+        stock,
+        StockDataOperations(get_realtime_quotes=get_eastmoney_service().get_realtime_quote),
+    )
 
 
 def db_factor_to_model(factor: FactorScoreDB) -> FactorScore:
@@ -153,12 +152,7 @@ def calculate_strategies(daily_data: list) -> list:
 
 
 def get_price_history(db: Session, code: str) -> list[PricePointDB]:
-    return (
-        db.query(PricePointDB)
-        .filter(PricePointDB.stock_code == code)
-        .order_by(PricePointDB.date)
-        .all()
-    )
+    return service_get_price_history(db, code)
 
 
 def _item_value(item, key: str, default=None):
@@ -190,161 +184,30 @@ def get_initialized_tushare_service():
 
 
 def _is_trading_time() -> bool:
-    now = datetime.now(MARKET_TIMEZONE).replace(tzinfo=None)
-    weekday = now.weekday()
-
-    if weekday >= 5:
-        return False
-
-    hour = now.hour
-    minute = now.minute
-
-    if (hour == 9 and minute >= 30) or (hour == 10) or (hour == 11 and minute < 30):
-        return True
-    if hour == 13 or hour == 14:
-        return True
-
-    return False
+    return service_is_trading_time()
 
 def _is_morning_break_time() -> bool:
-    now = datetime.now(MARKET_TIMEZONE).replace(tzinfo=None)
-    weekday = now.weekday()
-    if weekday >= 5:
-        return False
-
-    hour = now.hour
-    minute = now.minute
-
-    if hour == 11 and minute >= 30:
-        return True
-    if hour == 12:
-        return True
-
-    return False
-
-def _previous_weekday(value: datetime) -> datetime:
-    previous = value - timedelta(days=1)
-    while previous.weekday() >= 5:
-        previous -= timedelta(days=1)
-    return previous
+    return service_is_morning_break_time()
 
 def _last_market_session_end_time() -> datetime:
-    now = datetime.now(MARKET_TIMEZONE).replace(tzinfo=None)
-    today = now.date()
-    hour = now.hour
-    minute = now.minute
-    weekday = now.weekday()
-
-    is_today_trading_day = weekday < 5
-
-    if is_today_trading_day:
-        if (hour > 15) or (hour == 15):
-            return datetime.combine(today, datetime.min.time()).replace(hour=15)
-        if _is_morning_break_time():
-            return datetime.combine(today, datetime.min.time()).replace(hour=11, minute=30)
-        if hour < 9 or (hour == 9 and minute < 30):
-            prev = _previous_weekday(now)
-            return datetime.combine(prev.date(), datetime.min.time()).replace(hour=15)
-
-    prev = _previous_weekday(now)
-    return datetime.combine(prev.date(), datetime.min.time()).replace(hour=15)
+    return service_last_market_session_end_time(morning_break_time=_is_morning_break_time)
 
 def _history_needs_refresh(history: list[PricePointDB], stock: Stock) -> bool:
-    if not history:
-        return True
-
-    latest = max(history, key=lambda price: price.date)
-    try:
-        latest_date = datetime.strptime(latest.date, "%Y-%m-%d").date()
-    except ValueError:
-        return True
-
-    if stock.updated_at is None:
-        return True
-
-    last_update = stock.updated_at
-    if last_update.tzinfo is None:
-        last_update = last_update.replace(tzinfo=timezone.utc)
-    last_update = last_update.astimezone(MARKET_TIMEZONE).replace(tzinfo=None)
-
-    now = datetime.now(MARKET_TIMEZONE).replace(tzinfo=None)
-
-    if _is_trading_time():
-        minutes_since_update = (now - last_update).total_seconds() / 60
-        return minutes_since_update > 5
-
-    last_session_end = _last_market_session_end_time()
-    if latest_date < last_session_end.date():
-        return True
-    return last_update < last_session_end
+    return service_history_needs_refresh(
+        history,
+        stock,
+        is_trading_time=_is_trading_time,
+        last_market_session_end_time=_last_market_session_end_time,
+    )
 
 
 def ensure_price_history(db: Session, stock: Stock) -> list[PricePointDB]:
-    history = get_price_history(db, stock.code)
-    if not _history_needs_refresh(history, stock):
-        return history
-
-    try:
-        end_date = datetime.now().strftime("%Y%m%d")
-
-        if history:
-            latest_date = max(h.date for h in history)
-            start_date = latest_date.replace("-", "")
-            logger.info(f"Incremental update for stock {stock.code}, starting from {latest_date}")
-        else:
-            start_date = (datetime.now() - timedelta(days=720)).strftime("%Y%m%d")
-
-        daily_data = get_initialized_tushare_service().get_daily_price(_stock_ts_code(stock), start_date, end_date)
-        if not daily_data:
-            stock.data_status = "partial" if not history else stock.data_status
-            db.commit()
-            return history
-
-        updated_count = 0
-        inserted_count = 0
-        for item in daily_data:
-            date = _format_tushare_date(_item_value(item, "date") or _item_value(item, "trade_date"))
-            close = float(_item_value(item, "close", 0) or 0)
-            if not date or close <= 0:
-                continue
-
-            existing = db.query(PricePointDB).filter(
-                PricePointDB.stock_code == stock.code,
-                PricePointDB.date == date
-            ).first()
-
-            if existing:
-                existing.open = float(_item_value(item, "open", close) or close)
-                existing.high = float(_item_value(item, "high", close) or close)
-                existing.low = float(_item_value(item, "low", close) or close)
-                existing.close = close
-                existing.volume = int(_item_value(item, "volume", _item_value(item, "vol", 0)) or 0)
-                updated_count += 1
-            else:
-                db.add(
-                    PricePointDB(
-                        stock_code=stock.code,
-                        date=date,
-                        open=float(_item_value(item, "open", close) or close),
-                        high=float(_item_value(item, "high", close) or close),
-                        low=float(_item_value(item, "low", close) or close),
-                        close=close,
-                        volume=int(_item_value(item, "volume", _item_value(item, "vol", 0)) or 0),
-                    )
-                )
-                inserted_count += 1
-
-        stock.data_status = "normal"
-        stock.updated_at = datetime.now(timezone.utc)
-        db.commit()
-        logger.info(f"Updated price history for stock {stock.code}: {inserted_count} inserted, {updated_count} updated")
-    except Exception as e:
-        logger.error(f"Failed to ensure price history for stock {stock.code}: {e}")
-        db.rollback()
-        return history
-
-    refreshed_history = sorted(get_price_history(db, stock.code), key=lambda price: price.date)
-    return refreshed_history
+    return service_ensure_price_history(
+        db,
+        stock,
+        StockDataOperations(get_tushare_service=get_initialized_tushare_service),
+        needs_refresh=_history_needs_refresh,
+    )
 
 
 def parse_custom_strategy_id(strategy_id: str) -> tuple[str, int] | None:
