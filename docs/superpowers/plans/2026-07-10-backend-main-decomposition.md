@@ -26,7 +26,7 @@
 - [x] Task 3: Extract stock summary helpers
 - [x] Task 4: Extract auth router
 - [x] Task 5: Extract watchlist router
-- [ ] Task 6: Verify, update docs, and record completion
+- [x] Task 6: Verify, update docs, and record completion
 
 ---
 
@@ -432,7 +432,7 @@ git commit -m "refactor: extract watchlist router from main"
 - Verifies: full backend behavior after decomposition.
 - Produces: completed TODO tracking for first slice.
 
-- [ ] **Step 1: Start temporary backend server for encryption tests**
+- [x] **Step 1: Start temporary backend server for encryption tests**
 
 Run:
 
@@ -449,7 +449,7 @@ Invoke-WebRequest -Uri http://127.0.0.1:8000/api/auth/public-key -UseBasicParsin
 
 returns HTTP 200.
 
-- [ ] **Step 2: Run backend tests**
+- [x] **Step 2: Run backend tests**
 
 Run:
 
@@ -459,7 +459,7 @@ python -m pytest backend/tests -q
 
 Expected: all backend tests pass.
 
-- [ ] **Step 3: Stop temporary backend server**
+- [x] **Step 3: Stop temporary backend server**
 
 Run:
 
@@ -471,7 +471,7 @@ if (Test-Path .backend-test-server.pid) {
 }
 ```
 
-- [ ] **Step 4: Check `main.py` size**
+- [x] **Step 4: Check `main.py` size**
 
 Run:
 
@@ -482,7 +482,7 @@ rg -n "^@app\\.(get|post|patch|delete)" backend/app/main.py
 
 Expected: line count decreases from the baseline of about 2280, and auth/watchlist decorators are no longer in `main.py`.
 
-- [ ] **Step 5: Mark design TODO completed**
+- [x] **Step 5: Mark design TODO completed**
 
 In `docs/superpowers/specs/2026-07-10-backend-main-decomposition-design.md`, change:
 
@@ -496,7 +496,7 @@ to:
 - [x] 第一轮：拆出 `schemas.py`、`stock_summary.py`、`routers/auth.py`、`routers/watchlist.py`
 ```
 
-- [ ] **Step 6: Commit verification docs**
+- [x] **Step 6: Commit verification docs**
 
 ```powershell
 git add docs/superpowers/specs/2026-07-10-backend-main-decomposition-design.md docs/superpowers/plans/2026-07-10-backend-main-decomposition.md

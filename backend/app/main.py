@@ -34,7 +34,7 @@ from app.ordinary_user import (
     build_risk_explanations,
 )
 from app.routers.watchlist import router as watchlist_router
-from app.routers.auth import get_admin_user, get_current_user, router as auth_router
+from app.routers.auth import decrypt_password, get_admin_user, get_current_user, router as auth_router
 from app.stock_summary import (
     build_primary_risk,
     build_primary_support,
@@ -1220,9 +1220,6 @@ def build_custom_backtest(detail: StockDetail, request: BacktestRequest) -> Stra
     return engine_result_to_detail(result)
 
 
-
-
-@app.get("/api/health")
 
 @app.get("/api/health")
 def health_check():

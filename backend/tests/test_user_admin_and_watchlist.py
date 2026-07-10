@@ -328,7 +328,7 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
           "name": "ICBC",
           "ts_code": "601398.SH",
           "market": "SH",
-      }), patch("app.main.get_eastmoney_service", return_value=fake_eastmoney):
+      }), patch("app.routers.watchlist.get_eastmoney_service", return_value=fake_eastmoney):
           add_response = self.client.post(
               "/api/watchlist/601398",
               headers={"Authorization": f"Bearer {alice_token}"},
@@ -519,7 +519,7 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
       fake_tushare = FakeTuShare()
       alice_token = self._login("alice", "Alice@123!")
       with patch("app.main.tushare_config.token", ""), \
-          patch("app.main.get_eastmoney_service", return_value=FakeEastMoney()), \
+          patch("app.routers.watchlist.get_eastmoney_service", return_value=FakeEastMoney()), \
           patch("app.main.get_tushare_service", return_value=fake_tushare):
           refresh_response = self.client.get(
               "/api/stocks/refresh-all",

@@ -133,7 +133,7 @@ python -m pytest backend/tests -q
 
 ## 8. TODO 跟踪
 
-- [ ] 第一轮：拆出 `schemas.py`、`stock_summary.py`、`routers/auth.py`、`routers/watchlist.py`
+- [x] 第一轮：拆出 `schemas.py`、`stock_summary.py`、`routers/auth.py`、`routers/watchlist.py`
 - [ ] 第二轮：拆出股票详情和股票数据查询 router
 - [ ] 第三轮：拆出数据刷新和数据源状态 router
 - [ ] 第四轮：拆出 backtest router

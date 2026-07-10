@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import Stock, User, WatchlistItem, get_db
+from app.eastmoney_service import get_eastmoney_service
 from app.ordinary_user import build_data_health
 from app.routers.auth import get_current_user
 from app.schemas import (
@@ -25,6 +26,23 @@ from app.watchlist_intelligence import build_watchlist_intelligence
 
 logger = logging.getLogger("stocks")
 router = APIRouter(prefix="/api/watchlist")
+
+
+def update_stock_realtime_quote(db: Session, stock: Stock) -> None:
+    try:
+        quotes = get_eastmoney_service().get_realtime_quote([stock.code])
+        if not quotes:
+            return
+        quote = quotes[0]
+        stock.price = quote.get("price", stock.price or 0)
+        stock.change_percent = quote.get("change_percent", stock.change_percent or 0)
+        stock.name = quote.get("name", stock.name)
+        stock.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(stock)
+    except Exception as e:
+        logger.error(f"Failed to update realtime quote for stock {stock.code}: {e}")
+        db.rollback()
 
 
 def watchlist_intelligence_to_model(result) -> WatchlistIntelligence:
