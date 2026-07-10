@@ -22,23 +22,13 @@ from app.database import (
     get_db,
 )
 from app.eastmoney_service import get_eastmoney_service
-from app.ordinary_user import (
-    build_data_health,
-    build_pre_trade_checklist,
-    build_risk_explanations,
-)
 from app.routers.auth import get_current_user
 from app.schemas import (
     AlertItem,
     BacktestRequest,
     BacktestTrade,
-    ChecklistItem,
-    DataCompleteness,
-    DataHealth,
     FactorScore,
-    PreTradeChecklist,
     PricePoint,
-    RiskExplanation,
     StockDetail,
     StockSummary,
     StrategyDetail,
@@ -46,66 +36,14 @@ from app.schemas import (
 )
 from app.security import hash_password
 from app.stock_summary import (
-    build_primary_risk,
-    build_primary_support,
-    determine_data_completeness,
-    determine_reference_status,
     stock_to_summary,
 )
 from app.tushare_service import get_tushare_service, init_tushare
+from app.stock_detail_assembler import StockDetailOperations, assemble_stock_detail
 
 logger = logging.getLogger("stocks")
 MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
 router = APIRouter(prefix="/api/stocks")
-
-def build_ordinary_stock_summary(
-    stock: Stock,
-    factors: list[FactorScore],
-    alerts: list[AlertItem],
-    data_completeness: DataCompleteness,
-) -> tuple[str, list[str], list[str]]:
-    support_factors = [f"{factor.label}: {factor.description}" for factor in factors if factor.value >= 65][:3]
-    risk_factors = [alert.message for alert in alerts[:3]]
-
-    if data_completeness in ("insufficient", "incomplete"):
-        return (
-            "当前数据不足，暂不适合形成明确判断。建议补充数据后再分析。",
-            support_factors,
-            risk_factors or ["关键数据不完整，结论只能弱参考。"],
-        )
-
-    status = determine_reference_status(stock.score or 50, stock.signal or "neutral", data_completeness, alerts)
-    if status == "positive":
-        summary = "当前整体偏积极，适合加入重点观察，但仍需自行评估风险与仓位。"
-    elif status == "cautious":
-        summary = "当前风险项较多，建议谨慎关注，并先完成操作前检查。"
-    else:
-        summary = "当前整体偏中性，适合继续观察后续业绩、资金和价格趋势变化。"
-
-    if not support_factors:
-        support_factors = [build_primary_support(stock.score or 50, status)]
-    if not risk_factors:
-        risk_factors = [build_primary_risk(status, data_completeness)]
-
-    return summary, support_factors, risk_factors
-
-
-
-def data_health_to_model(result) -> DataHealth:
-    return DataHealth(**result.__dict__)
-
-
-def risk_explanation_to_model(result) -> RiskExplanation:
-    return RiskExplanation(**result.__dict__)
-
-
-def checklist_to_model(result) -> PreTradeChecklist:
-    return PreTradeChecklist(
-        mode=result.mode,
-        title=result.title,
-        completion_hint=result.completion_hint,
-        items=[ChecklistItem(**item.__dict__) for item in result.items],
-    )
 
 def update_stock_realtime_quote(db: Session, stock: Stock) -> None:
     try:
@@ -421,78 +359,25 @@ def parse_custom_strategy_id(strategy_id: str) -> tuple[str, int] | None:
 
 
 def get_stock_detail(db: Session, code: str, update_realtime: bool = True) -> StockDetail:
-    stock = db.query(Stock).filter(Stock.code == code).first()
-    if not stock:
-        raise HTTPException(status_code=404, detail="Stock not found")
-
-    # 濡偓閺屻儲妲搁崥锕傛付鐟曚焦娲块弬鏉跨杽閺冩儼顢戦幆?
-    # A閼测剝鏁归惄妯绘闂傜繝璐?5:00閿涘本鏁归惄妯烘倵閹靛秷鐑︽潻鍥ㄦ纯閺?
-    now = datetime.now()
-    today = now.date()
-    current_hour = now.hour
-    market_close_hour = 15  # A閼测剝鏁归惄妯绘闂?5:00
-
-    need_update_realtime = update_realtime
-    if stock.updated_at and update_realtime:
-        last_update_date = stock.updated_at.date() if hasattr(stock.updated_at, 'date') else stock.updated_at
-        if last_update_date == today and current_hour >= market_close_hour:
-            need_update_realtime = False
-            logger.info(f"Stock {code} already refreshed after market close today")
-        elif last_update_date == today and current_hour < market_close_hour:
-            logger.info(f"Stock {code} was refreshed today before market close; realtime update allowed")
-
-    if need_update_realtime:
-        update_stock_realtime_quote(db, stock)
-    history = ensure_price_history(db, stock)
-
-    # 从TuShare获取财务数据并计算因子评分
-    factors = ensure_factor_scores(db, stock, history)
-    # 基于真实数据生成风险预警
-    alerts = ensure_alerts(db, stock, history, factors)
-    custom_strategies = db.query(StrategyResultDB).filter(
-        StrategyResultDB.stock_code == code,
-        StrategyResultDB.id.like("custom-%"),
-    ).all()
-    strategy_models = [
-        StrategyResult(**strategy)
-        for strategy in calculate_strategies(history)
-    ] + [db_strategy_to_model(strategy) for strategy in custom_strategies]
-    factor_models = [db_factor_to_model(f) for f in factors]
-    alert_models = [db_alert_to_model(a) for a in alerts]
-    data_completeness = determine_data_completeness(stock, history, factor_models)
-    holder_rows = db.query(InstHoldDB).filter(InstHoldDB.stock_code == code).all()
-    dividend_rows = db.query(DividendDB).filter(DividendDB.stock_code == code).all()
-    data_health_result = build_data_health(stock, history, factor_models, alert_models, holder_rows, dividend_rows)
-    risk_results = build_risk_explanations(stock, factor_models, alert_models, holder_rows, dividend_rows, data_health_result)
-    buy_checklist_result = build_pre_trade_checklist(stock, risk_results, data_health_result, mode="buy")
-    sell_checklist_result = build_pre_trade_checklist(stock, risk_results, data_health_result, mode="sell")
-    ordinary_summary, support_factors, risk_factors = build_ordinary_stock_summary(
-        stock,
-        factor_models,
-        alert_models,
-        data_completeness,
+    return assemble_stock_detail(
+        db,
+        code,
+        update_realtime,
+        StockDetailOperations(
+            update_realtime_quote=update_stock_realtime_quote,
+            ensure_price_history=ensure_price_history,
+            ensure_factor_scores=ensure_factor_scores,
+            ensure_alerts=ensure_alerts,
+            calculate_strategies=calculate_strategies,
+            strategy_to_model=db_strategy_to_model,
+            factor_to_model=db_factor_to_model,
+            alert_to_model=db_alert_to_model,
+            price_to_model=db_price_to_model,
+            ensure_ai_summary=ensure_ai_summary,
+        ),
     )
 
-    return StockDetail(
-        stock=stock_to_summary(stock, history, factor_models, alert_models),
-        factors=factor_models,
-        strategies=strategy_models,
-        alerts=alert_models,
-        history=[db_price_to_model(h) for h in history],
-        # 基于真实数据生成AI摘要
-        ai_summary=ensure_ai_summary(db, stock, history, factors, alerts),
-        data_status=stock.data_status,
-        updated_at=stock.updated_at,
-        ordinary_summary=ordinary_summary,
-        support_factors=support_factors,
-        risk_factors=risk_factors,
-        data_completeness=data_completeness,
-        data_updated_at=stock.updated_at,
-        data_health=data_health_to_model(data_health_result),
-        risk_explanations=[risk_explanation_to_model(result) for result in risk_results],
-        buy_checklist=checklist_to_model(buy_checklist_result),
-        sell_checklist=checklist_to_model(sell_checklist_result),
-    )
+
 
 
 def ensure_stock_related_data(db: Session, stock: Stock) -> None:

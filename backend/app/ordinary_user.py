@@ -79,10 +79,14 @@ def build_data_health(stock, history=None, factors=None, alerts=None, holders=No
         source_summary.append("本地风险提示")
     if holder_count:
         source_summary.append("重要股东变动")
-    elif history_count < 20 or factor_count < 4:
+    else:
         missing_items.append("重要股东变动数据不足")
+        downgrade_reasons.append("缺少重要股东变动记录")
     if dividend_count:
         source_summary.append("分红记录")
+    else:
+        missing_items.append("分红记录不足")
+        downgrade_reasons.append("缺少分红记录")
 
     if data_status == "partial":
         downgrade_reasons.append("股票基础数据处于部分可用状态")
@@ -96,6 +100,9 @@ def build_data_health(stock, history=None, factors=None, alerts=None, holders=No
     elif data_status == "partial" or factor_count < 4:
         completeness = "incomplete"
         user_message = "当前关键数据不完整，结论只能弱参考。"
+    elif not holder_count or not dividend_count:
+        completeness = "mostly_complete"
+        user_message = "当前核心数据基本完整，部分辅助数据仍需补充。"
     else:
         completeness = "complete"
         user_message = "当前关键数据较完整，结论可信度相对较高。"

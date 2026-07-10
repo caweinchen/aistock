@@ -11,7 +11,16 @@ from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.database import Base, FactorScoreDB, PricePointDB, Stock, User, WatchlistItem
+from app.database import (
+    Base,
+    DividendDB,
+    FactorScoreDB,
+    InstHoldDB,
+    PricePointDB,
+    Stock,
+    User,
+    WatchlistItem,
+)
 from app.main import app, get_db
 from app.security import hash_password
 
@@ -253,9 +262,18 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
 
     def test_watchlist_insights_returns_data_health_overview(self):
       self.db.add_all([
-          Stock(code="600010", name="包钢股份", price=1.2, change_percent=0.1, score=50, signal="neutral", data_status="partial"),
+          Stock(code="600010", name="包钢股份", price=1.2, change_percent=0.1, score=50, signal="neutral", data_status="normal", updated_at=datetime(2026, 7, 10, 10, 0, tzinfo=timezone.utc)),
+          Stock(code="600011", name="华能国际", price=7.2, change_percent=-0.1, score=48, signal="neutral", data_status="partial", updated_at=datetime(2026, 7, 10, 9, 0, tzinfo=timezone.utc)),
           WatchlistItem(user_id=self.user_a.id, stock_code="600010", created_at=datetime.now(timezone.utc)),
+          WatchlistItem(user_id=self.user_a.id, stock_code="600011", created_at=datetime.now(timezone.utc)),
       ])
+      for code in ("600010", "600011"):
+          for index in range(20):
+              self.db.add(PricePointDB(stock_code=code, date=f"2026-06-{index + 1:02d}", open=1, high=2, low=1, close=2, volume=1000))
+          for key in ("valuation", "momentum", "volatility", "profitability"):
+              self.db.add(FactorScoreDB(stock_code=code, key=key, label=key, value=60, description="数据可用。"))
+          self.db.add(InstHoldDB(stock_code=code, trade_date="20260630", change_amount=10))
+          self.db.add(DividendDB(stock_code=code, ann_date="20260630", div_cash=0.1))
       self.db.commit()
 
       alice_token = self._login("alice", "Alice@123!")
@@ -263,9 +281,10 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
 
       self.assertEqual(response.status_code, 200, response.text)
       overview = response.json()["data_health_overview"]
-      self.assertEqual(overview["total"], 1)
-      self.assertGreaterEqual(overview["insufficient_count"], 1)
-      self.assertIn("数据", overview["message"])
+      self.assertEqual(overview["total"], 2)
+      self.assertEqual(overview["insufficient_count"], 0)
+      self.assertEqual(overview["incomplete_count"], 1)
+      self.assertIn("数据不完整", overview["message"])
 
     def test_watchlist_insights_returns_intelligence(self):
       self.db.add_all([

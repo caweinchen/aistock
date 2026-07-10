@@ -5,7 +5,17 @@ from types import SimpleNamespace
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.database import Stock, User, WatchlistItem, get_db
+from app.database import (
+    AlertItemDB,
+    DividendDB,
+    FactorScoreDB,
+    InstHoldDB,
+    PricePointDB,
+    Stock,
+    User,
+    WatchlistItem,
+    get_db,
+)
 from app.eastmoney_service import get_eastmoney_service
 from app.ordinary_user import build_data_health
 from app.routers.auth import get_current_user
@@ -26,6 +36,13 @@ from app.watchlist_intelligence import build_watchlist_intelligence
 
 logger = logging.getLogger("stocks")
 router = APIRouter(prefix="/api/watchlist")
+
+
+def _group_by_stock_code(rows) -> dict[str, list]:
+    grouped: dict[str, list] = {}
+    for row in rows:
+        grouped.setdefault(row.stock_code, []).append(row)
+    return grouped
 
 
 def update_stock_realtime_quote(db: Session, stock: Stock) -> None:
@@ -70,6 +87,11 @@ def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(g
     watchlist_items = db.query(WatchlistItem).filter(WatchlistItem.user_id == user.id).all()
     codes = [item.stock_code for item in watchlist_items]
     stocks = db.query(Stock).filter(Stock.code.in_(codes)).all() if codes else []
+    histories = _group_by_stock_code(db.query(PricePointDB).filter(PricePointDB.stock_code.in_(codes)).all()) if codes else {}
+    factors = _group_by_stock_code(db.query(FactorScoreDB).filter(FactorScoreDB.stock_code.in_(codes)).all()) if codes else {}
+    alerts = _group_by_stock_code(db.query(AlertItemDB).filter(AlertItemDB.stock_code.in_(codes)).all()) if codes else {}
+    holders = _group_by_stock_code(db.query(InstHoldDB).filter(InstHoldDB.stock_code.in_(codes)).all()) if codes else {}
+    dividends = _group_by_stock_code(db.query(DividendDB).filter(DividendDB.stock_code.in_(codes)).all()) if codes else {}
     groups: dict[ReferenceStatus, list[StockSummary]] = {
         "positive": [],
         "watch": [],
@@ -83,7 +105,14 @@ def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(g
 
     for stock in stocks:
         summary = stock_to_summary(stock)
-        data_health_result = build_data_health(stock)
+        data_health_result = build_data_health(
+            stock,
+            histories.get(stock.code),
+            factors.get(stock.code),
+            alerts.get(stock.code),
+            holders.get(stock.code),
+            dividends.get(stock.code),
+        )
         if data_health_result.completeness == "insufficient":
             data_insufficient_count += 1
         if data_health_result.completeness == "incomplete":
