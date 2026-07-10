@@ -30,7 +30,7 @@
 - Produces: `StockDataOperations`、`is_trading_time()`、`is_morning_break_time()`、`last_market_session_end_time()`、`history_needs_refresh(history, stock)`。
 - Preserves: `stocks._is_trading_time()`、`stocks._is_morning_break_time()`、`stocks._last_market_session_end_time()`、`stocks._history_needs_refresh()`。
 
-- [ ] **Step 1: 写 router 委托失败测试**
+- [x] **Step 1: 写 router 委托失败测试**
 
 ```python
 from unittest.mock import patch
@@ -42,17 +42,17 @@ def test_history_refresh_boundary_delegates_to_service():
     delegated.assert_called_once()
 ```
 
-- [ ] **Step 2: 运行失败测试**
+- [x] **Step 2: 运行失败测试**
 
 Run: `python -m pytest backend/tests/test_stock_data_service.py -q`
 
 Expected: FAIL，因为 `service_history_needs_refresh` 尚不存在或 router 仍执行本地逻辑。
 
-- [ ] **Step 3: 新建 service 并迁移时间判断**
+- [x] **Step 3: 新建 service 并迁移时间判断**
 
 实现四个确定签名：`is_trading_time() -> bool`、`is_morning_break_time() -> bool`、`last_market_session_end_time() -> datetime`、`history_needs_refresh(history: list[PricePointDB], stock: Stock, *, is_trading_time: Callable[[], bool], last_market_session_end_time: Callable[[], datetime]) -> bool`。逐行迁移现有规则：交易时间内 5 分钟过期；非交易时间比较最近交易时段结束时间；最新行情日期落后时刷新。
 
-- [ ] **Step 4: 将 router 函数改为兼容委托**
+- [x] **Step 4: 将 router 函数改为兼容委托**
 
 ```python
 def _history_needs_refresh(history, stock):
@@ -66,13 +66,13 @@ def _history_needs_refresh(history, stock):
 
 其他时间函数以同样方式委托，确保现有对 `stocks._is_trading_time` 的 patch 仍会影响刷新判断。
 
-- [ ] **Step 5: 运行定向测试**
+- [x] **Step 5: 运行定向测试**
 
 Run: `python -m pytest backend/tests/test_stock_data_service.py backend/tests/test_backtest_engine.py -q`
 
 Expected: PASS。
 
-- [ ] **Step 6: 更新 TODO 并提交**
+- [x] **Step 6: 更新 TODO 并提交**
 
 ```powershell
 git add backend/app/stock_data_service.py backend/app/routers/stocks.py backend/tests/test_stock_data_service.py docs/superpowers/plans/2026-07-11-stock-data-service-extraction.md
@@ -94,17 +94,17 @@ git commit -m "refactor: extract stock refresh decisions"
 - `StockDataOperations` 字段: `get_tushare_service: Callable[[], Any]`。
 - Preserves: `stocks.get_price_history(db, code)` 和 `stocks.ensure_price_history(db, stock)`。
 
-- [ ] **Step 1: 写三个失败测试**
+- [x] **Step 1: 写三个失败测试**
 
 测试函数名固定为 `test_ensure_history_returns_cache_without_remote_call`、`test_ensure_history_upserts_incremental_rows` 和 `test_ensure_history_returns_original_cache_when_remote_fails`。第一个 patch `history_needs_refresh=False` 并断言 TuShare 未调用；第二个提供已有日期和两条远程数据，断言更新旧行并插入新行；第三个让远程抛异常，断言返回原缓存且执行 rollback。
 
-- [ ] **Step 2: 运行测试并确认因未委托 service 而失败**
+- [x] **Step 2: 运行测试并确认因未委托 service 而失败**
 
 Run: `python -m pytest backend/tests/test_stock_data_service.py -q`
 
 Expected: FAIL。
 
-- [ ] **Step 3: 迁移历史行情实现**
+- [x] **Step 3: 迁移历史行情实现**
 
 ```python
 def get_price_history(db: Session, code: str) -> list[PricePointDB]:
@@ -122,7 +122,7 @@ def ensure_price_history(
 
 将原函数的 720 天回溯、增量起始日期、upsert、`data_status`、commit/rollback 和排序行为原样迁移。
 
-- [ ] **Step 4: 将 router 兼容入口改为委托**
+- [x] **Step 4: 将 router 兼容入口改为委托**
 
 ```python
 def get_price_history(db, code):
@@ -137,13 +137,13 @@ def ensure_price_history(db, stock):
     )
 ```
 
-- [ ] **Step 5: 运行定向测试**
+- [x] **Step 5: 运行定向测试**
 
 Run: `python -m pytest backend/tests/test_stock_data_service.py backend/tests/test_backtest_engine.py backend/tests/test_tushare_integration.py -q`
 
 Expected: PASS。
 
-- [ ] **Step 6: 更新 TODO 并提交**
+- [x] **Step 6: 更新 TODO 并提交**
 
 ```powershell
 git add backend/app/stock_data_service.py backend/app/routers/stocks.py backend/tests/test_stock_data_service.py docs/superpowers/plans/2026-07-11-stock-data-service-extraction.md
@@ -165,17 +165,17 @@ git commit -m "refactor: extract price history service"
 - Produces: `update_stock_realtime_quote(db, stock, operations) -> None`。
 - Preserves: `stocks.update_stock_realtime_quote(db, stock) -> None`。
 
-- [ ] **Step 1: 写成功和失败路径测试**
+- [x] **Step 1: 写成功和失败路径测试**
 
 测试函数名固定为 `test_update_realtime_quote_persists_first_quote` 和 `test_update_realtime_quote_rolls_back_on_provider_error`。成功测试断言 price、change_percent、name、updated_at、commit 和 refresh；失败测试断言 rollback，并保持现有不向上抛出的行为。
 
-- [ ] **Step 2: 运行失败测试**
+- [x] **Step 2: 运行失败测试**
 
 Run: `python -m pytest backend/tests/test_stock_data_service.py -q`
 
 Expected: FAIL，因为 router 仍包含实时更新实现。
 
-- [ ] **Step 3: 迁移实时更新并保留 router 委托**
+- [x] **Step 3: 迁移实时更新并保留 router 委托**
 
 ```python
 def update_stock_realtime_quote(db: Session, stock: Stock, operations: StockDataOperations) -> None:
@@ -196,25 +196,32 @@ def update_stock_realtime_quote(db: Session, stock: Stock, operations: StockData
 
 router 传入 `get_eastmoney_service().get_realtime_quote` 作为 operation。
 
-- [ ] **Step 4: 运行定向和非认证全量测试**
+- [x] **Step 4: 运行定向和非认证全量测试**
 
 Run: `python -m pytest backend/tests --ignore=backend/tests/test_auth_encryption.py -q`
 
 Expected: PASS。
 
-- [ ] **Step 5: 启动临时 API 并运行全部后端测试**
+- [x] **Step 5: 启动临时 API 并运行全部后端测试**
 
 Run: 使用隐藏后台进程运行 `backend/start.py`，就绪后执行 `python -m pytest backend/tests -q`，最后停止进程。
 
 Expected: 所有测试 PASS。
 
-- [ ] **Step 6: 更新计划验证记录与 TODO**
+- [x] **Step 6: 更新计划验证记录与 TODO**
 
 在文档末尾记录日期、命令、通过数量和已知警告，并将本计划所有复选框标记为完成。
 
-- [ ] **Step 7: 最终提交**
+- [x] **Step 7: 最终提交**
 
 ```powershell
 git add backend/app/stock_data_service.py backend/app/routers/stocks.py backend/tests/test_stock_data_service.py docs/superpowers/plans/2026-07-11-stock-data-service-extraction.md
 git commit -m "refactor: extract realtime stock data service"
 ```
+
+## 验证记录
+
+- 2026-07-11：在后端工作机启动临时 API 服务后运行 `python -m pytest backend/tests -q`。
+- 结果：71 项测试通过，0 失败，7 个参数化子测试通过。
+- 已知警告：6 条，均为现有 SQLAlchemy `declarative_base()` 和 FastAPI `on_event` 弃用警告。
+- 变更范围：仅后端 service、router、测试和本计划，未修改前端文件。
