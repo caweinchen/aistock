@@ -49,6 +49,12 @@ from app.stock_data_service import (
     last_market_session_end_time as service_last_market_session_end_time,
     update_stock_realtime_quote as service_update_stock_realtime_quote,
 )
+from app.stock_analysis_service import (
+    AnalysisOperations,
+    ensure_ai_summary as service_ensure_ai_summary,
+    ensure_alerts as service_ensure_alerts,
+    ensure_factor_scores as service_ensure_factor_scores,
+)
 
 logger = logging.getLogger("stocks")
 router = APIRouter(prefix="/api/stocks")
@@ -840,48 +846,19 @@ import re
 
 
 def ensure_factor_scores(db: Session, stock: Stock, history: list) -> list[FactorScore]:
-    """从TuShare获取财务数据并计算因子评分"""
-    ts_code = _stock_ts_code(stock)
-    factors = []
-
-    try:
-        tushare = get_tushare_service()
-        if tushare.pro:
-            daily_basic = tushare.get_daily_basic(ts_code)
-            fina_indicator = tushare.get_fina_indicator(ts_code)
-            moneyflow = tushare.get_moneyflow(ts_code)
-            factors = calculate_factors_from_financial(history, daily_basic, fina_indicator, moneyflow)
-            if factors:
-                db.query(FactorScoreDB).filter(FactorScoreDB.stock_code == stock.code).delete()
-                for factor in factors:
-                    db.add(FactorScoreDB(
-                        stock_code=stock.code,
-                        key=factor.key,
-                        label=factor.label,
-                        value=factor.value,
-                        description=factor.description,
-                    ))
-                db.commit()
-                logger.info(f"Updated factor scores for stock: {stock.code}")
-                return factors
-    except Exception as e:
-        logger.error(f"Failed to fetch financial data for stock {stock.code}: {e}")
-        db.rollback()
-    if not factors and history:
-        factors = calculate_factors(history)
-        if factors:
-            db.query(FactorScoreDB).filter(FactorScoreDB.stock_code == stock.code).delete()
-            for factor in factors:
-                db.add(FactorScoreDB(
-                    stock_code=stock.code,
-                    key=_item_value(factor, "key", ""),
-                    label=_item_value(factor, "label", ""),
-                    value=_item_value(factor, "value", 50),
-                    description=_item_value(factor, "description", ""),
-                ))
-            db.commit()
-
-    return [db_factor_to_model(f) for f in db.query(FactorScoreDB).filter(FactorScoreDB.stock_code == stock.code).all()]
+    return service_ensure_factor_scores(
+        db,
+        stock,
+        history,
+        AnalysisOperations(
+            get_tushare_service=get_tushare_service,
+            calculate_financial_factors=calculate_factors_from_financial,
+            calculate_local_factors=calculate_factors,
+            factor_to_model=db_factor_to_model,
+            item_value=_item_value,
+            stock_ts_code=_stock_ts_code,
+        ),
+    )
 
 
 def calculate_factors_from_financial(history: list, daily_basic: dict, fina_indicator: dict, moneyflow: list) -> list[FactorScore]:
@@ -1016,91 +993,12 @@ def calculate_factors_from_financial(history: list, daily_basic: dict, fina_indi
 
 
 def ensure_alerts(db: Session, stock: Stock, history: list, factors: list) -> list[AlertItem]:
-    """基于真实数据生成风险预警"""
-    alerts = []
-
-    valuation_factor = next((f for f in factors if f.key == 'valuation'), None)
-    if valuation_factor and valuation_factor.value > 70:
-        if 'PE' in valuation_factor.description:
-            pe_match = re.search(r'PE.*?(\d+\.?\d*)', valuation_factor.description)
-            if pe_match:
-                pe_value = float(pe_match.group(1))
-                if pe_value > 50:
-                    alerts.append(AlertItem(level="high", title="估值过高风险", message=f"当前PE(TTM)为{pe_value:.1f}倍，远高于行业平均水平。"))
-
-    volatility_factor = next((f for f in factors if f.key == 'volatility'), None)
-    if volatility_factor and volatility_factor.value > 65:
-        alerts.append(AlertItem(level="medium", title="波动性风险", message=volatility_factor.description))
-
-    capital_factor = next((f for f in factors if f.key == 'capital_flow'), None)
-    if capital_factor and capital_factor.value < 35:
-        alerts.append(AlertItem(level="medium", title="资金流出风险", message=capital_factor.description))
-
-    profitability_factor = next((f for f in factors if f.key == 'profitability'), None)
-    if profitability_factor and profitability_factor.value < 35:
-        alerts.append(AlertItem(level="high", title="盈利能力风险", message=profitability_factor.description))
-
-    if history and len(history) >= 10:
-        recent_closes = [h.close for h in history[-10:]]
-        price_change = (recent_closes[-1] - recent_closes[0]) / recent_closes[0] * 100 if recent_closes[0] > 0 else 0
-        if price_change < -15:
-            alerts.append(AlertItem(level="high", title="价格下跌风险", message=f"近10日累计下跌{abs(price_change):.1f}%。"))
-        elif price_change > 20:
-            alerts.append(AlertItem(level="medium", title="短期涨幅过大", message=f"近10日累计上涨{price_change:.1f}%。"))
-
-    if alerts:
-        db.query(AlertItemDB).filter(AlertItemDB.stock_code == stock.code).delete()
-        for alert in alerts:
-            db.add(AlertItemDB(stock_code=stock.code, level=alert.level, title=alert.title, message=alert.message))
-        db.commit()
-        logger.info(f"Updated risk alerts for stock: {stock.code}")
-
-    return alerts
+    return service_ensure_alerts(db, stock, history, factors)
 
 
 def ensure_ai_summary(db: Session, stock: Stock, history: list, factors: list, alerts: list) -> str:
-    """基于真实数据生成AI摘要"""
-    summary_parts = []
+    return service_ensure_ai_summary(db, stock, history, factors, alerts)
 
-    avg_score = sum(f.value for f in factors) / len(factors) if factors else 50
-    if avg_score >= 70:
-        summary_parts.append("综合分析显示，该股票基本面强劲，各项指标表现优秀。")
-    elif avg_score >= 55:
-        summary_parts.append("综合分析显示，该股票基本面稳健，多数指标表现良好。")
-    elif avg_score >= 40:
-        summary_parts.append("综合分析显示，该股票基本面一般，部分指标需要关注。")
-    else:
-        summary_parts.append("综合分析显示，该股票基本面较弱，多项指标表现不佳。")
-
-    for factor in factors:
-        if factor.value >= 70:
-            summary_parts.append(f"{factor.label}方面表现优秀：{factor.description}")
-        elif factor.value <= 35:
-            summary_parts.append(f"{factor.label}方面需要关注：{factor.description}")
-
-    if alerts:
-        high_alerts = [a for a in alerts if a.level == 'high']
-        medium_alerts = [a for a in alerts if a.level == 'medium']
-        if high_alerts:
-            summary_parts.append(f"高风险提示：{'; '.join([a.title for a in high_alerts])}。")
-        if medium_alerts:
-            summary_parts.append(f"中等风险提示：{'; '.join([a.title for a in medium_alerts])}。")
-
-    if avg_score >= 70 and not alerts:
-        summary_parts.append("建议积极关注，可考虑逢低布局。")
-    elif avg_score >= 55 and len(alerts) <= 1:
-        summary_parts.append("建议持仓观望，适当控制仓位。")
-    elif avg_score < 40 or len([a for a in alerts if a.level == 'high']) >= 2:
-        summary_parts.append("建议谨慎观望，等待基本面改善。")
-    else:
-        summary_parts.append("建议适度关注，注意风险控制。")
-
-    ai_summary = "。".join(summary_parts)
-    stock.ai_summary = ai_summary
-    db.commit()
-    logger.info(f"Updated AI summary for stock: {stock.code}")
-
-    return ai_summary
 
 def calculate_factors(daily_data: list) -> list:
     """

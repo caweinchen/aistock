@@ -8,12 +8,12 @@
 
 ## TODO Tracking
 
-- [ ] TODO: 增加 `stock_analysis_service.py` 和 router 委托边界测试。
-- [ ] TODO: 迁移因子计算与缓存回退。
-- [ ] TODO: 迁移风险提示持久化。
-- [ ] TODO: 迁移 AI 摘要生成与持久化。
-- [ ] TODO: 运行全量后端测试并记录结果。
-- [ ] TODO: 提交并推送 `main`。
+- [x] TODO: 增加 `stock_analysis_service.py` 和 router 委托边界测试。
+- [x] TODO: 迁移因子计算与缓存回退。
+- [x] TODO: 迁移风险提示持久化。
+- [x] TODO: 迁移 AI 摘要生成与持久化。
+- [x] TODO: 运行全量后端测试并记录结果。
+- [x] TODO: 提交并推送 `main`。
 
 ## Task 1: 边界与因子
 
@@ -39,3 +39,11 @@
 2. 运行临时 API 服务后的 `python -m pytest backend/tests -q`。
 3. 将本计划 TODO 和验证结果更新为完成。
 4. 提交后端变更并推送 `main`。
+
+## 验证记录
+
+- 2026-07-11：启动临时 API 后运行 `python -m pytest backend/tests -q`。
+- 结果：74 项测试通过，0 失败，10 个子测试通过。
+- 已知警告：6 条现有 SQLAlchemy/FastAPI 弃用警告。
+- 契约判定：API 路径、认证、错误码、响应字段和数据语义未变，无需更新 `docs/contracts/`。
+- 前端边界：本次未修改任何 `frontend/**` 文件。
