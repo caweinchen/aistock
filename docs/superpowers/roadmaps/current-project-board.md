@@ -10,6 +10,12 @@
   - Status: pending
   - Note: 现有前端联调已完成，但历史接口契约目录刚建立，后端电脑应在下一轮后端任务中补齐或按接口变更逐步补齐。
 
+- [ ] TODO: 后端 health 联调环境复核
+  - Owner: frontend machine
+  - Related plan: `docs/superpowers/plans/2026-06-23-global-header-search-navigation.md`
+  - Status: pending
+  - Note: 前端脚本、测试、类型检查和 Web bundle 已通过；本机 `127.0.0.1:8010` 后端服务当前未连接，后续联调时复核 `/api/health`。
+
 ## Ready For Frontend
 
 - [x] TODO: 普通用户前后端联调
@@ -31,6 +37,12 @@
 - [ ] TODO: 当前无阻塞项
 
 ## Done
+
+- [x] TODO: 全局头部搜索导航前端验证修复
+  - Owner: frontend machine
+  - Plan: `docs/superpowers/plans/2026-06-23-global-header-search-navigation.md`
+  - Status: completed except backend health environment check
+  - Verification: global header script passed, i18n script passed, frontend tests passed, TypeScript check passed, Metro Web bundle passed.
 
 - [x] TODO: 建立两机协作规约
   - Protocol: `docs/TWO_MACHINE_COLLABORATION_PROTOCOL.md`

@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const root = path.resolve(__dirname, '..');
+const root = path.resolve(__dirname, '..', 'frontend');
 
 function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');

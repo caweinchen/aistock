@@ -1,7 +1,7 @@
 import { Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useState, useEffect } from 'react';
-import { Bell, Globe, LogOut, Search, Settings, ShieldCheck, TrendingUp, User, X, Wifi, WifiOff } from 'lucide-react-native';
+import { Bell, Globe, LogOut, Search, Settings, ShieldCheck, Sparkles, TrendingUp, User, X, Wifi, WifiOff } from 'lucide-react-native';
 import { I18nProvider, useTranslation, type Locale } from './src/i18n';
 import { initStorage } from './src/services/storage';
 import { HomeScreen } from './src/pages/HomeScreen';
@@ -266,6 +266,12 @@ export default function App() {
               onClearSearch={handleClearSearch}
             />
           )}
+          {currentScreen !== 'login-settings' && (
+            <SharedResearchPanel
+              researchSnapshot={researchSnapshot}
+              selectedStockCode={selectedStockCode}
+            />
+          )}
           <View style={styles.screenSlot}>{renderScreen()}</View>
         </View>
       </SafeAreaView>
@@ -386,6 +392,52 @@ function SearchPanel({
   );
 }
 
+function SharedResearchPanel({
+  researchSnapshot,
+  selectedStockCode,
+}: {
+  researchSnapshot: ResearchSnapshot | null;
+  selectedStockCode?: string;
+}) {
+  const { t } = useTranslation();
+  const snapshot = researchSnapshot;
+
+  if (!snapshot && !selectedStockCode) {
+    return null;
+  }
+
+  const stockLabel = snapshot?.stockName
+    ? `${snapshot.stockName}${snapshot.stockCode ? ` ${snapshot.stockCode}` : ''}`
+    : selectedStockCode;
+
+  return (
+    <View style={styles.sharedResearchPanel}>
+      <View style={styles.sharedResearchHeader}>
+        <View style={styles.sharedResearchBadge}>
+          <Sparkles size={14} color="#0F8B8D" />
+          <Text style={styles.sharedResearchBadgeText}>{t.home.aiResearch}</Text>
+        </View>
+        <Text style={styles.sharedResearchStatus}>
+          {snapshot?.dataStatus === 'mock' ? t.home.mockData : t.home.realtimeData}
+        </Text>
+      </View>
+      <View style={styles.sharedResearchBody}>
+        <View style={styles.sharedResearchCopyBlock}>
+          <Text style={styles.sharedResearchTitle}>{stockLabel}</Text>
+          <Text style={styles.sharedResearchCopy} numberOfLines={2}>
+            {snapshot?.aiSummary ?? t.home.aiSummaryLoading}
+          </Text>
+        </View>
+        <View style={styles.sharedResearchMetrics}>
+          <Text style={styles.sharedResearchMetric}>{snapshot?.score ?? 0}/100</Text>
+          <Text style={styles.sharedResearchMetric}>{snapshot?.alertCount ?? 0} item</Text>
+          <Text style={styles.sharedResearchMetric}>{snapshot?.averageWinRate ?? 0}%</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -498,6 +550,65 @@ const styles = StyleSheet.create({
   searchButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
+    fontWeight: '800',
+  },
+  sharedResearchPanel: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#D8DEE9',
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    padding: 12,
+  },
+  sharedResearchHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  sharedResearchBadge: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 6,
+  },
+  sharedResearchBadgeText: {
+    color: '#0F8B8D',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  sharedResearchStatus: {
+    color: '#6B7280',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  sharedResearchBody: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+  },
+  sharedResearchCopyBlock: {
+    flex: 1,
+    gap: 4,
+    minWidth: 0,
+  },
+  sharedResearchTitle: {
+    color: '#162033',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  sharedResearchCopy: {
+    color: '#4B5563',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  sharedResearchMetrics: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+    gap: 3,
+  },
+  sharedResearchMetric: {
+    color: '#162033',
+    fontSize: 12,
     fontWeight: '800',
   },
 });

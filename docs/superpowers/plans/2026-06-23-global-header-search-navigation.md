@@ -27,7 +27,7 @@
 - Consumes: `App.tsx`, `src/pages/HomeScreen.tsx`, `src/pages/StockDetailScreen.tsx`
 - Produces: `node scripts/check-global-header-navigation.js`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `scripts/check-global-header-navigation.js` with this content:
 
@@ -74,13 +74,13 @@ assertNotIncludes('src/pages/HomeScreen.tsx', "style={styles.searchPanel}");
 assertIncludes('src/pages/StockDetailScreen.tsx', "onBack");
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node scripts\check-global-header-navigation.js`
 
 Expected: FAIL with `App.tsx must include function AppHeader`.
 
-- [ ] **Step 3: Commit test only if this task is executed independently**
+- [x] **Step 3: Commit test only if this task is executed independently**
 
 Run only if committing is desired:
 
@@ -100,13 +100,13 @@ git commit -m "test: add global header navigation check"
 - Produces:
   - `HomeScreenProps.pendingSearchQuery?: string | null`
 
-- [ ] **Step 1: Read Expo SDK 56 docs**
+- [x] **Step 1: Read Expo SDK 56 docs**
 
 Open: `https://docs.expo.dev/versions/v56.0.0/`
 
 Confirm no new Expo APIs are needed.
 
-- [ ] **Step 2: Move authenticated header state and controls into App**
+- [x] **Step 2: Move authenticated header state and controls into App**
 
 In `App.tsx`, import React Native components and icons used by the header:
 
@@ -139,7 +139,7 @@ const handleClearSearch = () => {
 };
 ```
 
-- [ ] **Step 3: Add AppHeader and SearchPanel**
+- [x] **Step 3: Add AppHeader and SearchPanel**
 
 Create `AppHeader` and `SearchPanel` in `App.tsx` below `App`:
 
@@ -236,7 +236,7 @@ function SearchPanel({
 }
 ```
 
-- [ ] **Step 4: Render global header and search panel**
+- [x] **Step 4: Render global header and search panel**
 
 In the authenticated return block of `App.tsx`, render:
 
@@ -262,7 +262,7 @@ In the authenticated return block of `App.tsx`, render:
 </View>
 ```
 
-- [ ] **Step 5: Pass search props to HomeScreen**
+- [x] **Step 5: Pass search props to HomeScreen**
 
 In the home case:
 
@@ -277,7 +277,7 @@ In the home case:
 />
 ```
 
-- [ ] **Step 6: Remove local header state from HomeScreen**
+- [x] **Step 6: Remove local header state from HomeScreen**
 
 In `src/pages/HomeScreen.tsx`, remove local `isSearchVisible` and `searchQuery` state. Add prop:
 
@@ -301,7 +301,7 @@ useEffect(() => {
 }, [pendingSearchQuery, loadStocks]);
 ```
 
-- [ ] **Step 7: Remove the HomeScreen header and search panel blocks**
+- [x] **Step 7: Remove the HomeScreen header and search panel blocks**
 
 Delete the `<View style={styles.header}>...</View>` block from `HomeScreen`.
 
@@ -309,19 +309,19 @@ Delete the `{isSearchVisible && (...)}` search panel block from `HomeScreen`. Se
 
 Remove unused imports from `HomeScreen`: `Bell`, `Globe`, `LogOut`, `Search`, `Settings`, `User`, `X`, `TextInput`, and `Locale` when they are no longer referenced.
 
-- [ ] **Step 8: Run regression check**
+- [x] **Step 8: Run regression check**
 
 Run: `node scripts\check-global-header-navigation.js`
 
 Expected: PASS.
 
-- [ ] **Step 9: Run existing i18n regression check**
+- [x] **Step 9: Run existing i18n regression check**
 
 Run: `node scripts\check-detail-i18n.js`
 
 Expected: PASS.
 
-- [ ] **Step 10: Trigger Metro web bundle**
+- [x] **Step 10: Trigger Metro web bundle**
 
 Run:
 
@@ -344,12 +344,23 @@ Run:
 
 Expected: JSON containing `"status":"healthy"`.
 
-- [ ] **Step 12: Attempt TypeScript check**
+- [x] **Step 12: Attempt TypeScript check**
 
 Run: `npx tsc --noEmit`
 
 Expected: either PASS or the known TypeScript 6.0.3 `RangeError: Maximum call stack size exceeded`. If the known stack overflow appears, report it as an existing verification blocker.
 
-- [ ] **Step 13: Commit only if requested**
+- [x] **Step 13: Commit only if requested**
 
 Do not commit automatically in this dirty workspace unless the user asks.
+
+## 2026-07-11 Verification Update
+
+- [x] TODO: 修复 `scripts/check-global-header-navigation.js` 和 `scripts/check-detail-i18n.js`，使它们从当前 `frontend/` 目录读取应用文件。
+- [x] TODO: 在 `frontend/App.tsx` 增加 `SharedResearchPanel`，复用现有 `ResearchSnapshot` 展示全局研究快照，不新增后端接口。
+- [x] TODO: `node scripts\check-global-header-navigation.js` 已通过。
+- [x] TODO: `node scripts\check-detail-i18n.js` 已通过。
+- [x] TODO: `npm test` 已通过：10 个测试文件、29 个测试。
+- [x] TODO: `npx tsc --noEmit` 已通过。
+- [x] TODO: Metro Web bundle 已通过：`bundle status=200; length=5571763`。
+- [ ] TODO: 后端 health 检查未完成；`http://127.0.0.1:8010/api/health` 当前无法连接，本轮未启动或修改后端服务。
