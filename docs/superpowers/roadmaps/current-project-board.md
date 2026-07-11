@@ -2,6 +2,18 @@
 
 本看板用于两台电脑同步项目推进状态。所有未完成事项必须使用显式 TODO。
 
+## Current Checkpoint
+
+- Updated: 2026-07-11
+- Current phase: frontend integration follow-up
+- Completed: shared research panel, global header navigation checks, frontend verification, core API contracts, and stock analysis service extraction
+- Next: frontend machine复核本机 `http://127.0.0.1:8010/api/health` 联调环境
+- Blockers: none; backend service may need to be started locally before the health check
+- Frontend baseline: `b604cb2 feat: add shared research panel`
+- Backend baseline: `8ca69e7 docs: define core api contracts`
+- Verification baseline: 10 frontend test files / 29 tests passed; TypeScript passed; global header and detail i18n scripts passed; Metro Web bundle returned 200
+- Key decision: 本机继续只承担前端开发和联调配置；后端 service/assembler 后续分解保留给后端机
+
 ## In Progress
 
 - [x] TODO: 补齐核心 API 契约文档
