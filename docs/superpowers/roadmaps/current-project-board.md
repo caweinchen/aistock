@@ -5,13 +5,13 @@
 ## Current Checkpoint
 
 - Updated: 2026-07-11
-- Current phase: frontend integration follow-up
-- Completed: shared research panel, global header navigation checks, frontend verification, core API contracts, and stock analysis service extraction
-- Next: frontend machine复核本机 `http://127.0.0.1:8010/api/health` 联调环境
-- Blockers: none; backend service may need to be started locally before the health check
+- Current phase: waiting for next frontend task or backend integration handoff
+- Completed: shared research panel, global header navigation checks, frontend verification, health integration check, core API contracts, and stock analysis service extraction
+- Next: frontend machine当前无待执行 TODO；等待后端接口变更或新增前端规格/计划
+- Blockers: none
 - Frontend baseline: `b604cb2 feat: add shared research panel`
 - Backend baseline: `8ca69e7 docs: define core api contracts`
-- Verification baseline: 10 frontend test files / 29 tests passed; TypeScript passed; global header and detail i18n scripts passed; Metro Web bundle returned 200
+- Verification baseline: 10 frontend test files / 29 tests passed; TypeScript passed; global header and detail i18n scripts passed; Metro Web bundle returned 200; `GET /api/health` returned HTTP 200 with `status=healthy`
 - Key decision: 本机继续只承担前端开发和联调配置；后端 service/assembler 后续分解保留给后端机
 
 ## In Progress
@@ -22,11 +22,11 @@
   - Status: done
   - Note: 已补齐 auth、stocks、watchlist、backtests 四个核心域；后续接口变更按域同步维护。
 
-- [ ] TODO: 后端 health 联调环境复核
+- [x] TODO: 后端 health 联调环境复核
   - Owner: frontend machine
   - Related plan: `docs/superpowers/plans/2026-06-23-global-header-search-navigation.md`
-  - Status: pending
-  - Note: 前端脚本、测试、类型检查和 Web bundle 已通过；本机 `127.0.0.1:8010` 后端服务当前未连接，后续联调时复核 `/api/health`。
+  - Status: completed
+  - Verification: 2026-07-11 启动本机用户态 MySQL 和后端联调服务后，`GET http://127.0.0.1:8010/api/health` 返回 HTTP 200 和 `status=healthy`；未修改后端代码。
 
 ## Ready For Frontend
 
@@ -53,8 +53,8 @@
 - [x] TODO: 全局头部搜索导航前端验证修复
   - Owner: frontend machine
   - Plan: `docs/superpowers/plans/2026-06-23-global-header-search-navigation.md`
-  - Status: completed except backend health environment check
-  - Verification: global header script passed, i18n script passed, frontend tests passed, TypeScript check passed, Metro Web bundle passed.
+  - Status: completed
+  - Verification: global header script passed, i18n script passed, frontend tests passed, TypeScript check passed, Metro Web bundle passed, backend health integration check passed.
 
 - [x] TODO: 建立两机协作规约
   - Protocol: `docs/TWO_MACHINE_COLLABORATION_PROTOCOL.md`

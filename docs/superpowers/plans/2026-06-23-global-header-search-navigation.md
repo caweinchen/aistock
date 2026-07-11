@@ -363,4 +363,4 @@ Do not commit automatically in this dirty workspace unless the user asks.
 - [x] TODO: `npm test` 已通过：10 个测试文件、29 个测试。
 - [x] TODO: `npx tsc --noEmit` 已通过。
 - [x] TODO: Metro Web bundle 已通过：`bundle status=200; length=5571763`。
-- [ ] TODO: 后端 health 检查未完成；`http://127.0.0.1:8010/api/health` 当前无法连接，本轮未启动或修改后端服务。
+- [x] TODO: 后端 health 联调环境复核已完成；2026-07-11 启动本机用户态 MySQL（`127.0.0.1:3307`）和后端联调服务（`127.0.0.1:8010`），`GET /api/health` 返回 HTTP 200 和 `status=healthy`，未修改后端代码。
