@@ -4,11 +4,11 @@
 
 ## In Progress
 
-- [ ] TODO: 补齐核心 API 契约文档
+- [x] TODO: 补齐核心 API 契约文档
   - Owner: backend machine
   - Location: `docs/contracts/`
-  - Status: pending
-  - Note: 现有前端联调已完成，但历史接口契约目录刚建立，后端电脑应在下一轮后端任务中补齐或按接口变更逐步补齐。
+  - Status: done
+  - Note: 已补齐 auth、stocks、watchlist、backtests 四个核心域；后续接口变更按域同步维护。
 
 - [ ] TODO: 后端 health 联调环境复核
   - Owner: frontend machine
