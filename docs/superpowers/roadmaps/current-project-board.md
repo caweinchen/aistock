@@ -1,66 +1,81 @@
 # Current Project Board
 
-本看板用于两台电脑同步项目推进状态。所有未完成事项必须使用显式 TODO。
+本看板是两台电脑领取当前 AIStock 工作、交接和判断阶段准入的唯一入口。历史规格与计划仅作为证据；未列入本看板的历史 TODO 不得自动开工。
 
 ## Current Checkpoint
 
-- Updated: 2026-07-11
-- Current phase: waiting for next frontend task or backend integration handoff
-- Completed: shared research panel, global header navigation checks, frontend verification, health integration check, core API contracts, and stock analysis service extraction
-- Next: frontend machine当前无待执行 TODO；等待后端接口变更或新增前端规格/计划
-- Blockers: none
-- Frontend baseline: `b604cb2 feat: add shared research panel`
-- Backend baseline: `8ca69e7 docs: define core api contracts`
-- Verification baseline: 10 frontend test files / 29 tests passed; TypeScript passed; global header and detail i18n scripts passed; Metro Web bundle returned 200; `GET /api/health` returned HTTP 200 with `status=healthy`
-- Key decision: 本机继续只承担前端开发和联调配置；后端 service/assembler 后续分解保留给后端机
+- Updated: 2026-07-12
+- Primary remote: Gitee `main`
+- Current baseline: 以本次文档整理提交后的 Gitee SHA 为准
+- GitHub mirror: TODO — 当前 `github.com:443` 网络不稳定，推送失败时记录准确错误并在网络恢复后补推
+- Current phase: documentation governance and next-slice selection
+- Integration gate: documentation-only change, runtime integration exempt because no product behavior or API contract changes
+- Blockers: 下一产品切片尚未由用户选定
+- Next handoff: 用户选择下一切片后，先锁定阶段规格，再由后端或前端 owner 建立聚焦计划
 
-## In Progress
+## Completed Baseline
 
-- [x] TODO: 补齐核心 API 契约文档
-  - Owner: backend machine
-  - Location: `docs/contracts/`
-  - Status: done
-  - Note: 已补齐 auth、stocks、watchlist、backtests 四个核心域；后续接口变更按域同步维护。
+- [x] TODO: 普通用户 MVP、可信度与留存增强完成。
+- [x] TODO: 自选股智能参考增强的已规划切片完成。
+- [x] TODO: 股票详情、全局导航和普通用户前端联调完成。
+- [x] TODO: auth、stocks、watchlist、backtests 核心 API 契约完成。
+- [x] TODO: 后端路由第一阶段拆分完成。
+- [x] TODO: 股票详情 assembler、股票数据 service、股票分析 service 拆分完成。
+- [x] TODO: Gitee 主远端、双远端规则和 Multica Gitee-only 项目资源完成。
 
-- [x] TODO: 后端 health 联调环境复核
-  - Owner: frontend machine
-  - Related plan: `docs/superpowers/plans/2026-06-23-global-header-search-navigation.md`
-  - Status: completed
-  - Verification: 2026-07-11 启动本机用户态 MySQL 和后端联调服务后，`GET http://127.0.0.1:8010/api/health` 返回 HTTP 200 和 `status=healthy`；未修改后端代码。
+## Current Work Queue
 
-## Ready For Frontend
+### Backend Structural Guard
 
-- [x] TODO: 普通用户前后端联调
-  - Owner: frontend machine
-  - Plan: `docs/superpowers/plans/2026-07-11-ordinary-user-frontend-integration.md`
-  - Status: completed
-  - Verification: frontend tests passed, TypeScript check passed, local browser integration verified.
+- Owner: backend machine
+- Current status: `Spec Ready`
+- Spec: `docs/superpowers/specs/2026-07-10-backend-main-decomposition-design.md`
+- Backend plan: 下一次出现复杂 router/service 变更时新建聚焦后端计划；不继续扩张旧大型计划
+- Contract: `N/A`，除非重构改变接口或数据语义
+- Frontend plan: `N/A`
+- Integration: 纯内部重构且契约不变时记录豁免；否则进入真实接口联调
+- Gitee baseline SHA: TODO — 后端机领取时填写
+- GitHub mirror: TODO — 网络恢复后补推
+- Blockers: 无当前实现任务；这是长期结构门禁
+- Next handoff: 后端机在下一次后端功能前检查 `main.py`、router、service/assembler 边界
+- [ ] TODO: Owner `backend machine` — 保持 `main.py` 只负责 app 装配，禁止复杂业务逻辑回流。
 
-## Ready For Backend
+### Offline-First Login and App Cache
 
-- [ ] TODO: 后端 `main.py` 后续 service/assembler 分解
-  - Owner: backend machine
-  - Spec: `docs/superpowers/specs/2026-07-10-backend-main-decomposition-design.md`
-  - Status: pending
-  - Note: 前端电脑不得修改后端实现；如前端联调发现接口缺口，只记录问题并交给后端电脑。
+- Owner: frontend machine after user approval
+- Current status: `Needs Decision`
+- Spec: `docs/superpowers/specs/2026-06-29-offline-first-login-cache-design.md`
+- Frontend plan: `docs/superpowers/plans/2026-06-29-offline-first-login-cache.md`
+- Backend plan: `N/A`，当前范围不新增离线写队列或后端接口
+- Contract: 复用现有契约；若发现缺口，先交给后端机处理
+- Integration: 获批后需建立新的聚焦联调计划
+- Gitee baseline SHA: TODO — 获批时填写
+- GitHub mirror: TODO — 网络恢复后补推
+- Blockers: 用户尚未选择其为下一阶段
+- Next handoff: 用户批准后由前端机重新核对 Expo 56 和当前缓存实现，再拆出聚焦计划
+- [ ] TODO: Owner `user` — 决定是否将离线优先登录缓存作为下一前端切片。
+
+## Integration Gate
+
+- Current gate status: `N/A — documentation-only`
+- Backend baseline SHA: `N/A`
+- Frontend baseline SHA: `N/A`
+- Contract status: unchanged
+- Automated verification: passed — `git diff --check`
+- Manual verification: exempt; no runtime behavior changed
+- Next-stage admission: Pending user selection
 
 ## Blocked
 
-- [ ] TODO: 当前无阻塞项
+- [ ] TODO: Owner `repository maintainers` — GitHub 镜像受 `github.com:443` 超时阻塞；Gitee 主线不受阻，网络恢复后补推相同 HEAD。
 
-## Done
+## Next Slice Creation Rules
 
-- [x] TODO: 全局头部搜索导航前端验证修复
-  - Owner: frontend machine
-  - Plan: `docs/superpowers/plans/2026-06-23-global-header-search-navigation.md`
-  - Status: completed
-  - Verification: global header script passed, i18n script passed, frontend tests passed, TypeScript check passed, Metro Web bundle passed, backend health integration check passed.
+下一功能获批后，必须在同一变更集中：
 
-- [x] TODO: 建立两机协作规约
-  - Protocol: `docs/TWO_MACHINE_COLLABORATION_PROTOCOL.md`
-  - Frontend role: `docs/agents/frontend-machine.md`
-  - Backend role: `docs/agents/backend-machine.md`
-
-- [x] TODO: 后端启动脚本本地联调改进已推送
-  - File: `start_backend.bat`
-  - Status: pushed to `main`
+1. 在本看板新增切片及 Owner。
+2. 锁定阶段规格。
+3. 如涉及接口，先建立 backend 计划并更新契约。
+4. 契约 `Contract Ready` 后再建立 frontend 计划。
+5. 两端本机验证完成后建立 integration 计划。
+6. 联调通过后更新 Gitee SHA、GitHub 状态和 Next handoff。

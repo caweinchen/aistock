@@ -40,6 +40,18 @@
 
 如果某一步暂时无法完成，必须在对应文档中保留明确 TODO，并写清阻塞原因或后续动作。
 
+## 阶段交付状态与联调门禁
+
+影响前后端协作的切片必须依次经过：`Spec Ready` → `Backend In Progress` → `Contract Ready` → `Frontend In Progress` → `Awaiting Integration` → `Integration Passed` → `Completed`。
+
+- 后端交接必须包含 Gitee SHA、后端验证证据、契约路径和兼容性说明。
+- 契约未达到 `Contract Ready` 时，前端不得依靠猜测开始接口接入。
+- 前后端本机验证未分别通过时，不得进入 `Awaiting Integration`。
+- 联调必须使用真实接口，并覆盖规格要求的成功路径及相关鉴权、空态或错误路径。
+- 联调结果必须记录前后端基准 SHA、验证命令或操作、结果、阻塞项 Owner 和 Next handoff。
+- 门禁失败时，下一阶段保持 Pending，并新增带 Owner、原因和验收条件的 TODO。
+- 纯文档变更不改变规格、契约或运行行为时可以豁免运行联调，但必须通过文档检查并记录豁免原因。
+
 ## 文档结构
 
 机器角色模板放在：

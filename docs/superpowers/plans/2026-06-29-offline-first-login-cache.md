@@ -1,5 +1,10 @@
 # Offline-First Login and App Cache Implementation Plan
 
+## Current Decision Status
+
+- [ ] TODO: Owner `frontend machine` — 由用户重新确认是否将本计划作为下一前端切片；确认前状态为 `Needs Decision`，不得由历史复选框自动启动实现。
+- [ ] TODO: Owner `frontend machine` — 如果获批，开始前重新核对 Expo 56 文档、当前依赖、现有缓存实现和 Gitee `main` 基准，并将本计划拆成当前可执行的聚焦前端计划。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make the Expo app open to login first and render normal pages from app-local cache unless the user explicitly refreshes or performs a server action.

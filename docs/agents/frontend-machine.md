@@ -24,5 +24,8 @@ This machine follows the frontend-machine role unless the user explicitly author
 ## Completion Rules
 
 - Update related specs, plans, contracts, or roadmap TODO state in the same change set.
-- After local frontend verification passes, commit and push to remote `main`.
+- Consume API behavior from `docs/contracts/`; do not infer missing fields or semantics from backend implementation.
+- Do not start an API-dependent slice until the project board marks its contract `Contract Ready`.
+- For integration, verify the real backend success path and every auth, empty-state, or error path required by the current spec.
+- After local frontend verification passes, commit and push to Gitee `main` first, then mirror GitHub according to the collaboration protocol.
 - If backend changes are required, stop and ask the user to route the work to the backend machine or explicitly authorize the exception.
