@@ -52,5 +52,5 @@
 - [x] **Step 2:** 检查所有当前 TODO 都具有 Owner 或决策条件。
 - [x] **Step 3:** 删除非 AIStock 游戏规格和计划。
 - [x] **Step 4:** 更新本规格和计划 TODO 状态。
-- [ ] **Step 5:** 提交文档变更并先推送 Gitee `main`。
-- [ ] **Step 6:** 尝试同步 GitHub；失败时记录准确 TODO。
+- [x] **Step 5:** 提交文档变更并先推送 Gitee `main`。
+- [x] **Step 6:** 同步 GitHub `main`；Gitee 与 GitHub 均验证到 `be2de5202db56bf6583a17c41f938ff1c3915597`。

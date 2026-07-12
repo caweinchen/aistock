@@ -66,7 +66,7 @@ git commit -m "docs: make Gitee the primary remote"
 
 预期：提交只包含上述三份文档。
 
-- [ ] **Step 5: 按新规则同步远端**
+- [x] **Step 5: 按新规则同步远端**
 
 运行：
 
@@ -76,3 +76,5 @@ git push origin main
 ```
 
 预期：Gitee 推送必须成功；GitHub 推送成功则完成双端同步，因网络失败则在本计划新增明确 TODO，记录失败原因和待补推动作。
+
+Verification: 2026-07-12，Gitee `main` 与 GitHub `origin/main` 均同步到 `be2de5202db56bf6583a17c41f938ff1c3915597`。

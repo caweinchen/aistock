@@ -6,8 +6,8 @@
 
 - Updated: 2026-07-12
 - Primary remote: Gitee `main`
-- Current baseline: 以本次文档整理提交后的 Gitee SHA 为准
-- GitHub mirror: TODO — 当前 `github.com:443` 网络不稳定，推送失败时记录准确错误并在网络恢复后补推
+- Current baseline: `be2de5202db56bf6583a17c41f938ff1c3915597`
+- GitHub mirror: synchronized to `be2de5202db56bf6583a17c41f938ff1c3915597`
 - Current phase: documentation governance and next-slice selection
 - Integration gate: documentation-only change, runtime integration exempt because no product behavior or API contract changes
 - Blockers: 下一产品切片尚未由用户选定
@@ -67,7 +67,7 @@
 
 ## Blocked
 
-- [ ] TODO: Owner `repository maintainers` — GitHub 镜像受 `github.com:443` 超时阻塞；Gitee 主线不受阻，网络恢复后补推相同 HEAD。
+- [x] TODO: Owner `repository maintainers` — 本次治理提交已同步 Gitee 与 GitHub；后续若 `github.com:443` 再次超时，按双远端规则新增当次补推 TODO。
 
 ## Next Slice Creation Rules
 
