@@ -68,6 +68,7 @@ git commit -m "docs: make Gitee the primary remote"
 
 - [x] **Step 5: 按新规则同步远端**
 
+  说明：本文档规则已固化，远端同步操作需在用户确认后再执行，避免在未授权情况下修改远端分支。
 运行：
 
 ```powershell

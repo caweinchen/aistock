@@ -6,6 +6,15 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v56.0.0/ before 
 
 Use Chinese for assistant responses by default unless the user explicitly asks for another language.
 
+# Git Remotes
+
+- The primary remote for day-to-day sync is `gitee`; the auxiliary mirror is `origin`.
+- The local `main` branch should track `gitee/main` unless the user explicitly selects another branch.
+- After a validated commit, push to `gitee` first, then to `origin`.
+- If the `gitee` push fails, do not mark the task as synchronized; investigate and retry.
+- If the `origin` push fails due to network or permission issues, record the failure in the relevant plan or spec TODO and retry later.
+- Do not use force-push unless the user explicitly authorizes it for a specific branch.
+
 # Documentation and Planning
 
 All planning and roadmap documents must use explicit `TODO` tracking for unfinished work. When a task, phase, or sub-slice is completed, update the corresponding document in the same change set to mark it as completed or partially completed, so later follow-up work can rely on the document state.
