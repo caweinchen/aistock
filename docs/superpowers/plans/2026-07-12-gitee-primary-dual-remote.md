@@ -31,15 +31,20 @@
 - Consumes: Git 远端 `gitee` 和 `origin`，分支 `main`。
 - Produces: 后续所有 agent 和两台开发电脑共同遵守的拉取、推送、失败处理与完成定义。
 
-- [ ] **Step 1: 更新根目录长期指令**
+**Multica enforcement:**
+
+- [x] 前后端 agent instructions 已写入 Gitee 优先、双远端顺序、GitHub 失败 TODO 和禁止强推规则。
+- [x] Workspace 仓库登记已移除重复 GitHub 项目资源，只保留 `https://gitee.com/caweinhen/aistock.git`。
+
+- [x] **Step 1: 更新根目录长期指令**
 
 在 `AGENTS.md` 添加 `# Git Remotes`，明确远端角色、推送顺序、失败处理、禁止强推和 `main` 跟踪规则。
 
-- [ ] **Step 2: 更新两机协作协议**
+- [x] **Step 2: 更新两机协作协议**
 
 在 `docs/TWO_MACHINE_COLLABORATION_PROTOCOL.md` 添加“双远端同步规则”，并把角色完成条件和整体完成定义中的笼统“推送到远端”改为 Gitee 主远端必须成功、GitHub 辅助远端同步或记录 TODO。
 
-- [ ] **Step 3: 验证文档一致性**
+- [x] **Step 3: 验证文档一致性**
 
 运行：
 
@@ -50,7 +55,7 @@ rg -n "gitee|origin|GitHub|Gitee|强制推送|TODO" AGENTS.md docs/TWO_MACHINE_C
 
 预期：`git diff --check` 退出码为 `0`；两份文档明确包含相同的远端名称、顺序和失败语义。
 
-- [ ] **Step 4: 更新计划 TODO 并提交**
+- [x] **Step 4: 更新计划 TODO 并提交**
 
 将本计划已完成步骤标为 `[x]`，然后运行：
 
