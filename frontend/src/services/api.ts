@@ -69,10 +69,6 @@ function normalizeStockDetail(detail: StockDetail): StockDetail {
 }
 
 function normalizeWatchlistInsights(insights: WatchlistInsights): WatchlistInsights {
-  if (insights.data_health_overview) {
-    return insights;
-  }
-
   const groups = insights.groups ?? {
     positive: [],
     watch: [],
@@ -98,9 +94,39 @@ function normalizeWatchlistInsights(insights: WatchlistInsights): WatchlistInsig
     .sort()
     .at(-1) ?? insights.data_updated_at ?? null;
 
+  const legacyIntelligence = insights.intelligence ?? {
+    radar: {
+      title: '自选股观察概览',
+      summary: insights.risk_overview,
+      priority_count: groups.positive?.length ?? 0,
+      cautious_count: groups.cautious?.length ?? 0,
+      insufficient_count: groups.insufficient_data?.length ?? 0,
+      average_score: allStocks.length ? allStocks.reduce((sum, stock) => sum + (stock.score ?? 0), 0) / allStocks.length : null,
+    },
+    observations: [],
+    insights: allStocks.map((stock) => ({
+      code: stock.code,
+      name: stock.name,
+      focus_level: groups.positive?.some((item) => item.code === stock.code) ? 'priority' as const
+        : groups.cautious?.some((item) => item.code === stock.code) ? 'cautious' as const
+          : groups.insufficient_data?.some((item) => item.code === stock.code) ? 'insufficient_data' as const : 'watch' as const,
+      focus_label: stock.reference_label ?? '继续观察',
+      focus_reason: stock.primary_support ?? stock.primary_risk ?? '请进入详情页核对数据与依据。',
+      support_points: stock.primary_support ? [stock.primary_support] : [],
+      risk_points: stock.primary_risk ? [stock.primary_risk] : [],
+      data_completeness: stock.data_completeness ?? 'insufficient' as const,
+      score: stock.score ?? null,
+      risk_score: stock.primary_risk ? 50 : 0,
+      priority_score: stock.score ?? 0,
+      updated_at: stock.data_updated_at ?? null,
+    })),
+    sort_modes: ['overall', 'risk', 'data_health', 'recent_change'] as const,
+  };
+
   return {
     ...insights,
-    data_health_overview: {
+    intelligence: legacyIntelligence,
+    data_health_overview: insights.data_health_overview ?? {
       total: insights.total,
       insufficient_count: insufficientCount,
       incomplete_count: incompleteCount,

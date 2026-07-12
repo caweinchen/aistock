@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { AlertTriangle, ChevronRight, RefreshCcw } from 'lucide-react-native';
 import { StockRow } from '../components/StockRow';
+import { WatchlistInsightsPanel } from '../components/WatchlistInsightsPanel';
 import { FactorTile } from '../components/FactorTile';
 import { StrategyCard } from '../components/StrategyCard';
 import { AlertCard } from '../components/AlertCard';
@@ -9,10 +10,9 @@ import { BacktestBuilder } from '../components/BacktestBuilder';
 import { useStockData } from '../hooks/useStockData';
 import { getWatchlistInsights } from '../services/api';
 import { formatPrice, formatUpdatedAt, getChangeColor } from '../utils/formatters';
-import type { ReferenceStatus, ResearchSnapshot, StrategyTemplate, WatchlistInsights } from '../types';
+import type { ResearchSnapshot, StrategyTemplate, WatchlistInsights } from '../types';
 import { useEffect, useState } from 'react';
 import { useTranslation } from '../i18n';
-import type { TranslationSchema } from '../i18n/types';
 
 interface HomeScreenProps {
   onOpenSettings?: () => void;
@@ -83,6 +83,7 @@ export function HomeScreen({
   const [isRefreshingWatchlist, setIsRefreshingWatchlist] = useState(false);
   const [watchlistInsights, setWatchlistInsights] = useState<WatchlistInsights | null>(null);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const [insightsError, setInsightsError] = useState(false);
 
   useEffect(() => {
     if (pendingSearchQuery !== null) {
@@ -179,11 +180,12 @@ export function HomeScreen({
 
   const loadWatchlistInsights = async () => {
     setIsLoadingInsights(true);
+    setInsightsError(false);
     try {
       const insights = await getWatchlistInsights();
       setWatchlistInsights(insights);
     } catch {
-      setWatchlistInsights(null);
+      setInsightsError(true);
     } finally {
       setIsLoadingInsights(false);
     }
@@ -257,86 +259,14 @@ export function HomeScreen({
         </Pressable>
       </View>
 
-      {(watchlistInsights || isLoadingInsights) && (
-        <View style={styles.insightPanel}>
-          <View style={styles.insightHeader}>
-            <Text style={styles.sectionTitle}>{t.home.watchlistInsights}</Text>
-            {isLoadingInsights && <ActivityIndicator size="small" color="#0F8B8D" />}
-          </View>
-          {watchlistInsights && (
-            <>
-              <Text style={styles.subtleText}>{watchlistInsights.risk_overview}</Text>
-              {watchlistInsights.data_health_overview && (
-                <View style={styles.dataHealthStrip}>
-                  <Text style={styles.dataHealthTitle}>{t.home.dataHealthOverview}</Text>
-                  <Text style={styles.subtleText}>{watchlistInsights.data_health_overview.message}</Text>
-                  {watchlistInsights.data_health_overview.latest_updated_at && (
-                    <Text style={styles.disclaimerText}>
-                      {t.home.dataUpdatedAt}: {formatUpdatedAt(
-                        watchlistInsights.data_health_overview.latest_updated_at,
-                        locale === 'zh' ? 'zh-CN' : locale === 'zh-Hant' ? 'zh-TW' : 'en-US',
-                        t.formatter.updated,
-                      )}
-                    </Text>
-                  )}
-                </View>
-              )}
-              {watchlistInsights.intelligence?.radar && (
-                <View style={styles.watchlistRadarCard}>
-                  <Text style={styles.dataHealthTitle}>{t.home.watchlistRadar}</Text>
-                  <Text style={styles.subtleText}>{watchlistInsights.intelligence.radar.summary}</Text>
-                  <View style={styles.radarStatsRow}>
-                    <Text style={styles.radarStatText}>
-                      {watchlistInsights.intelligence.radar.priority_count} {groupTitle('positive', t)}
-                    </Text>
-                    <Text style={styles.radarStatText}>
-                      {watchlistInsights.intelligence.radar.cautious_count} {groupTitle('cautious', t)}
-                    </Text>
-                    <Text style={styles.radarStatText}>
-                      {watchlistInsights.intelligence.radar.insufficient_count} {groupTitle('insufficient_data', t)}
-                    </Text>
-                  </View>
-                </View>
-              )}
-              {Boolean(watchlistInsights.intelligence?.observations?.length) && (
-                <View style={styles.observationBlock}>
-                  <Text style={styles.dataHealthTitle}>{t.home.todayObservations}</Text>
-                  {watchlistInsights.intelligence!.observations.slice(0, 3).map((observation) => (
-                    <View key={`${observation.type}-${observation.title}`} style={styles.observationItem}>
-                      <Text style={styles.insightName}>{observation.title}</Text>
-                      <Text style={styles.insightReason}>{observation.description}</Text>
-                      {Boolean(observation.stock_codes.length) && (
-                        <Text style={styles.disclaimerText}>
-                          {t.home.relatedStocks}: {observation.stock_codes.join(', ')}
-                        </Text>
-                      )}
-                    </View>
-                  ))}
-                </View>
-              )}
-              {(['positive', 'watch', 'cautious', 'insufficient_data'] as const).map((groupKey) => {
-                const items = watchlistInsights.groups[groupKey] ?? [];
-                return (
-                  <View key={groupKey} style={styles.insightGroup}>
-                    <Text style={styles.insightGroupTitle}>{groupTitle(groupKey, t)}</Text>
-                    {items.length ? (
-                      items.slice(0, 3).map((stock) => (
-                        <Pressable key={stock.code} style={styles.insightItem} onPress={() => handleStockPress(stock.code)}>
-                          <Text style={styles.insightName}>{stock.name}</Text>
-                          <Text style={styles.insightReason}>{stock.primary_support ?? stock.reference_label}</Text>
-                        </Pressable>
-                      ))
-                    ) : (
-                      <Text style={styles.insightEmpty}>{t.home.noStocks}</Text>
-                    )}
-                  </View>
-                );
-              })}
-              <Text style={styles.disclaimerText}>{watchlistInsights.disclaimer}</Text>
-            </>
-          )}
-        </View>
-      )}
+      <WatchlistInsightsPanel
+        error={insightsError}
+        insights={watchlistInsights}
+        loading={isLoadingInsights}
+        locale={locale}
+        onOpenStock={handleStockPress}
+        onRetry={() => void loadWatchlistInsights()}
+      />
 
       <View style={styles.stockList}>
         {stocks.map((stock) => (
@@ -446,15 +376,6 @@ function LoadingBlock({ label }: { label: string }) {
       <Text style={styles.subtleText}>{label}</Text>
     </View>
   );
-}
-
-function groupTitle(status: ReferenceStatus, t: TranslationSchema): string {
-  return {
-    positive: t.home.groupPositive,
-    watch: t.home.groupWatch,
-    cautious: t.home.groupCautious,
-    insufficient_data: t.home.groupInsufficientData,
-  }[status];
 }
 
 const styles = StyleSheet.create({

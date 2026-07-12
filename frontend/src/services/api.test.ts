@@ -309,6 +309,18 @@ describe('api cache policy', () => {
     });
   });
 
+  it('builds sortable insight cards when a legacy response omits intelligence', async () => {
+    mockLocalDb();
+    const legacyInsights: WatchlistInsights = { ...watchlistInsights, intelligence: undefined };
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => legacyInsights })));
+    const { getWatchlistInsights } = await import('./api');
+
+    const result = await getWatchlistInsights();
+
+    expect(result.intelligence?.sort_modes).toEqual(['overall', 'risk', 'data_health', 'recent_change']);
+    expect(result.intelligence?.insights[0]).toMatchObject({ code: stock.code, focus_level: 'priority' });
+  });
+
   it('normalizes legacy stock detail risk fields from cache', async () => {
     const cachedDetail: StockDetail = {
       ...detail,
