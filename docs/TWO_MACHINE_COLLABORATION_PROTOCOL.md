@@ -174,3 +174,7 @@ integration/feature-name
 - 发现职责范围外的改动时，先保留并说明，不自行重写。
 - 如果当前任务必须跨越职责边界，先获得用户明确授权。
 - 如果接口契约、规格和代码不一致，以规格和契约为讨论依据，修正后再继续开发。
+
+## Multica Daemon 仓库缓存故障
+
+当 Multica 报告 `cannot resolve requested ref`、仓库未同步或 GitHub 连接超时时，两台电脑统一按照 [`MULTICA_DAEMON_REPO_CACHE_RECOVERY.md`](MULTICA_DAEMON_REPO_CACHE_RECOVERY.md) 排查和恢复，不通过修改项目代码规避 daemon 缓存问题。
