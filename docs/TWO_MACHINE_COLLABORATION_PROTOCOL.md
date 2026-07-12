@@ -178,3 +178,7 @@ integration/feature-name
 ## Multica Daemon 仓库缓存故障
 
 当 Multica 报告 `cannot resolve requested ref`、仓库未同步或 GitHub 连接超时时，两台电脑统一按照 [`MULTICA_DAEMON_REPO_CACHE_RECOVERY.md`](MULTICA_DAEMON_REPO_CACHE_RECOVERY.md) 排查和恢复，不通过修改项目代码规避 daemon 缓存问题。
+
+## Multica Codex Runtime 故障
+
+当 Codex app-server 报告 `no progress timeout`、`codex_semantic_inactivity` 或被 ChatGPT Apps MCP 初始化阻塞时，两台电脑统一按照 [`MULTICA_CODEX_RUNTIME_RECOVERY.md`](MULTICA_CODEX_RUNTIME_RECOVERY.md) 建立并验证本机 runtime。机器相关的 profile、runtime 和 agent ID 必须在本机查询，不得复制另一台电脑的 UUID。
