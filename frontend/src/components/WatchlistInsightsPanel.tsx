@@ -11,10 +11,11 @@ interface Props {
   error: boolean;
   locale: string;
   onRetry: () => void;
+  onRefresh: () => void;
   onOpenStock: (code: string) => void;
 }
 
-export function WatchlistInsightsPanel({ insights, loading, error, locale, onRetry, onOpenStock }: Props) {
+export function WatchlistInsightsPanel({ insights, loading, error, locale, onRetry, onRefresh, onOpenStock }: Props) {
   const [sortMode, setSortMode] = useState<WatchlistSortMode>('overall');
   const [activeGroup, setActiveGroup] = useState<WatchlistFocusLevel>('priority');
   const intelligenceItems = insights?.intelligence?.insights ?? [];
@@ -31,19 +32,19 @@ export function WatchlistInsightsPanel({ insights, loading, error, locale, onRet
 
   if (loading && !insights) return <View style={styles.panel}><ActivityIndicator color="#0F8B8D" /></View>;
   if (error && !insights) return (
-    <View style={styles.errorCard}><AlertTriangle color="#B42318" size={20} /><Text style={styles.errorText}>{locale === 'en' ? 'Insights failed to load.' : '洞察加载失败，请重试。'}</Text><Pressable onPress={onRetry} style={styles.retry}><RefreshCcw color="#FFFFFF" size={14} /><Text style={styles.retryText}>{labels.retry}</Text></Pressable></View>
+    <View style={styles.errorCard}><AlertTriangle color="#B42318" size={20} /><Text style={styles.errorText}>{locale === 'en' ? 'Insights failed to load.' : '洞察加载失败，请重试。'}</Text><Pressable accessibilityLabel={locale === 'en' ? 'Retry insights' : '重试加载洞察'} onPress={onRetry} style={styles.retry}><RefreshCcw color="#FFFFFF" size={14} /><Text style={styles.retryText}>{labels.retry}</Text></Pressable></View>
   );
   if (!insights) return null;
 
   const availableModes: WatchlistSortMode[] = insights.intelligence?.sort_modes?.length ? insights.intelligence.sort_modes : ['overall', 'risk', 'data_health', 'recent_change'];
   return (
     <View style={styles.panel}>
-      <View style={styles.header}><Text style={styles.title}>{labels.title}</Text>{loading && <ActivityIndicator color="#0F8B8D" size="small" />}</View>
-      <View style={styles.riskCard}><Text style={styles.cardTitle}>{labels.risk}</Text><Text style={styles.body}>{insights.risk_overview}</Text></View>
+      <View style={styles.header}><Text style={styles.title}>{labels.title}</Text><Pressable accessibilityLabel={locale === 'en' ? 'Refresh insights' : '刷新洞察'} disabled={loading} onPress={onRefresh} style={styles.refreshButton}>{loading ? <ActivityIndicator color="#0F8B8D" size="small" /> : <RefreshCcw color="#0F8B8D" size={16} />}</Pressable></View>
+      <View accessibilityLabel={labels.risk} style={styles.riskCard}><Text style={styles.cardTitle}>{labels.risk}</Text><Text style={styles.body}>{insights.risk_overview}</Text></View>
       <View style={styles.controls}>{availableModes.map((mode) => <Pressable key={mode} onPress={() => setSortMode(mode)} style={[styles.chip, sortMode === mode && styles.chipActive]}><Text style={[styles.chipText, sortMode === mode && styles.chipTextActive]}>{sortLabels[['overall', 'risk', 'data_health', 'recent_change'].indexOf(mode)]}</Text></Pressable>)}</View>
-      <View style={styles.controls}>{groups.map((group, index) => <Pressable key={group} onPress={() => setActiveGroup(group)} style={[styles.groupChip, activeGroup === group && styles.groupChipActive]}><Text style={[styles.groupText, activeGroup === group && styles.groupTextActive]}>{groupLabels[index]} ({grouped[group].length})</Text></Pressable>)}</View>
+      <View style={styles.controls}>{groups.map((group, index) => <Pressable accessibilityLabel={`${locale === 'en' ? 'Filter ' : '筛选'}${groupLabels[index]}`} key={group} onPress={() => setActiveGroup(group)} style={[styles.groupChip, activeGroup === group && styles.groupChipActive]}><Text style={[styles.groupText, activeGroup === group && styles.groupTextActive]}>{groupLabels[index]} ({grouped[group].length})</Text></Pressable>)}</View>
       <View style={styles.cards}>{grouped[activeGroup].map((item) => (
-        <Pressable key={item.code} onPress={() => onOpenStock(item.code)} style={styles.stockCard}>
+        <Pressable accessibilityLabel={`${locale === 'en' ? 'Open ' : '查看'}${item.name}${locale === 'en' ? ' details' : '详情'}`} key={item.code} onPress={() => onOpenStock(item.code)} style={styles.stockCard}>
           <View style={styles.stockHeader}><View><Text style={styles.stockName}>{item.name}</Text><Text style={styles.code}>{item.code} · {item.focus_label}</Text></View><ChevronRight color="#64748B" size={18} /></View>
           <Text style={styles.reason}>{item.focus_reason}</Text>
           {!!item.support_points.length && <Text style={styles.factor}><Text style={styles.support}>{labels.support}：</Text>{item.support_points.join('；')}</Text>}
@@ -59,6 +60,7 @@ export function WatchlistInsightsPanel({ insights, loading, error, locale, onRet
 const styles = StyleSheet.create({
   panel: { backgroundColor: '#FFFFFF', borderColor: '#DDE5EC', borderRadius: 18, borderWidth: 1, gap: 14, padding: 16 },
   header: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between' }, title: { color: '#162033', fontSize: 18, fontWeight: '800' },
+  refreshButton: { alignItems: 'center', borderColor: '#99D5D6', borderRadius: 999, borderWidth: 1, height: 34, justifyContent: 'center', width: 34 },
   riskCard: { backgroundColor: '#FFF7ED', borderColor: '#FED7AA', borderRadius: 14, borderWidth: 1, gap: 6, padding: 14 }, cardTitle: { color: '#9A3412', fontSize: 14, fontWeight: '800' }, body: { color: '#4B5563', fontSize: 13, lineHeight: 20 },
   controls: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }, chip: { backgroundColor: '#F1F5F9', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 }, chipActive: { backgroundColor: '#0F8B8D' }, chipText: { color: '#475569', fontSize: 12, fontWeight: '700' }, chipTextActive: { color: '#FFFFFF' },
   groupChip: { borderBottomColor: 'transparent', borderBottomWidth: 2, paddingHorizontal: 4, paddingVertical: 7 }, groupChipActive: { borderBottomColor: '#0F8B8D' }, groupText: { color: '#64748B', fontSize: 12, fontWeight: '700' }, groupTextActive: { color: '#0F6E70' }, cards: { gap: 10 },

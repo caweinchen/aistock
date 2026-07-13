@@ -265,6 +265,7 @@ export function HomeScreen({
         loading={isLoadingInsights}
         locale={locale}
         onOpenStock={handleStockPress}
+        onRefresh={() => void loadWatchlistInsights()}
         onRetry={() => void loadWatchlistInsights()}
       />
 
