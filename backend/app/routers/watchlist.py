@@ -14,6 +14,7 @@ from app.database import (
     Stock,
     User,
     WatchlistItem,
+    WatchlistInsightBaselineDB,
     get_db,
 )
 from app.eastmoney_service import get_eastmoney_service
@@ -66,8 +67,18 @@ def watchlist_intelligence_to_model(result) -> WatchlistIntelligence:
     return WatchlistIntelligence(
         radar=WatchlistRadar(**result.radar.__dict__),
         observations=[WatchlistObservation(**item.__dict__) for item in result.observations],
-        insights=[WatchlistStockInsight(**item.__dict__) for item in result.insights],
+        insights=[
+            WatchlistStockInsight(
+                **{
+                    **item.__dict__,
+                    "recent_change": item.recent_change.__dict__,
+                }
+            )
+            for item in result.insights
+        ],
         sort_modes=result.sort_modes,
+        risk_overview=result.risk_overview.__dict__,
+        industry_concentration=result.industry_concentration.__dict__,
     )
 
 
@@ -102,6 +113,13 @@ def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(g
     data_insufficient_count = 0
     data_incomplete_count = 0
     stock_contexts = []
+    baselines = {
+        row.stock_code: row
+        for row in db.query(WatchlistInsightBaselineDB).filter(
+            WatchlistInsightBaselineDB.user_id == user.id,
+            WatchlistInsightBaselineDB.stock_code.in_(codes),
+        ).all()
+    } if codes else {}
 
     for stock in stocks:
         summary = stock_to_summary(stock)
@@ -117,12 +135,17 @@ def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(g
             data_insufficient_count += 1
         if data_health_result.completeness == "incomplete":
             data_incomplete_count += 1
+        baseline = baselines.get(stock.code)
         stock_contexts.append(SimpleNamespace(
             stock=stock,
             summary=summary,
             data_health=data_health_result,
             support_factors=[summary.primary_support],
             risk_factors=[summary.primary_risk],
+            baseline_score=baseline.score if baseline else None,
+            baseline_risk_score=baseline.risk_score if baseline else None,
+            baseline_published_at=baseline.published_at if baseline else None,
+            baseline_data_completeness=baseline.data_completeness if baseline else None,
         ))
         groups[summary.reference_status].append(summary)
         if stock.updated_at and (latest_updated_at is None or stock.updated_at > latest_updated_at):
@@ -145,6 +168,19 @@ def get_watchlist_insights(db: Session = Depends(get_db), user: User = Depends(g
         health_message = "当前自选股数据健康状况可用于基础参考。"
 
     intelligence_result = build_watchlist_intelligence(stock_contexts)
+
+    published_at = datetime.now(timezone.utc)
+    for insight in intelligence_result.insights:
+        baseline = baselines.get(insight.code)
+        if baseline is None:
+            baseline = WatchlistInsightBaselineDB(user_id=user.id, stock_code=insight.code)
+            db.add(baseline)
+        baseline.score = insight.score
+        baseline.risk_score = insight.risk_score
+        baseline.data_completeness = insight.data_completeness
+        baseline.published_at = published_at
+    if intelligence_result.insights:
+        db.commit()
 
     return WatchlistInsights(
         total=len(stocks),

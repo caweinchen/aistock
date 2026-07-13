@@ -1,16 +1,6 @@
--- 创建数据库
-CREATE DATABASE IF NOT EXISTS at_stock DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE stocks ADD COLUMN industry VARCHAR(100) DEFAULT '';
 
--- 创建用户并授权
-CREATE USER IF NOT EXISTS 'aistock'@'%' IDENTIFIED BY 'CHANGE_ME_STRONG_PASSWORD';
-GRANT ALL PRIVILEGES ON at_stock.* TO 'aistock'@'%';
-FLUSH PRIVILEGES;
-
-USE at_stock;
-
-ALTER TABLE stocks ADD COLUMN IF NOT EXISTS industry VARCHAR(100) DEFAULT '';
-
-CREATE TABLE IF NOT EXISTS watchlist_insight_baselines (
+CREATE TABLE watchlist_insight_baselines (
   id INT AUTO_INCREMENT PRIMARY KEY,
   user_id INT NOT NULL,
   stock_code VARCHAR(20) NOT NULL,

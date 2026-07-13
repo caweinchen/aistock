@@ -20,6 +20,7 @@ from app.database import (
     Stock,
     User,
     WatchlistItem,
+    WatchlistInsightBaselineDB,
 )
 from app.main import app, get_db
 from app.security import hash_password
@@ -308,6 +309,68 @@ class UserAdminAndWatchlistTests(unittest.TestCase):
       self.assertGreaterEqual(len(intelligence["insights"]), 2)
       self.assertIn("观察", intelligence["radar"]["summary"])
       self.assertTrue(any(item["focus_level"] in ["priority", "cautious", "watch", "insufficient_data"] for item in intelligence["insights"]))
+
+    def test_watchlist_insights_requires_authentication(self):
+      response = self.client.get("/api/watchlist/insights")
+
+      self.assertIn(response.status_code, (401, 403))
+
+    def test_watchlist_insights_preserves_old_fields_and_persists_recent_change_baseline(self):
+      stock = Stock(
+          code="600201", name="Bank Sample", industry="银行", price=10.0,
+          change_percent=-1.0, score=40, signal="sell", data_status="normal",
+          updated_at=datetime(2026, 7, 12, 8, 0, tzinfo=timezone.utc),
+      )
+      self.db.add_all([
+          stock,
+          WatchlistItem(user_id=self.user_a.id, stock_code="600201", created_at=datetime.now(timezone.utc)),
+      ])
+      for index in range(20):
+          self.db.add(PricePointDB(
+              stock_code="600201", date=f"2026-06-{index + 1:02d}",
+              open=10, high=10.2, low=9.8, close=10.0, volume=10000,
+          ))
+      self.db.add_all([
+          FactorScoreDB(stock_code="600201", key="valuation", label="估值", value=40, description="估值需观察。"),
+          FactorScoreDB(stock_code="600201", key="volatility", label="波动", value=45, description="波动需观察。"),
+      ])
+      self.db.commit()
+      token = self._login("alice", "Alice@123!")
+
+      first = self.client.get("/api/watchlist/insights", headers={"Authorization": f"Bearer {token}"})
+
+      self.assertEqual(first.status_code, 200, first.text)
+      first_payload = first.json()
+      for old_field in ("total", "groups", "risk_overview", "data_updated_at", "disclaimer", "data_health_overview", "intelligence"):
+          self.assertIn(old_field, first_payload)
+      intelligence = first_payload["intelligence"]
+      self.assertIn("risk_overview", intelligence)
+      self.assertIn("industry_concentration", intelligence)
+      self.assertEqual(intelligence["industry_concentration"]["top_industry"], "银行")
+      self.assertEqual(intelligence["insights"][0]["recent_change"]["status"], "insufficient_data")
+      self.assertEqual(self.db.query(WatchlistInsightBaselineDB).count(), 1)
+
+      stock.score = 65
+      stock.updated_at = datetime(2026, 7, 12, 10, 0, tzinfo=timezone.utc)
+      self.db.commit()
+      second = self.client.get("/api/watchlist/insights", headers={"Authorization": f"Bearer {token}"})
+
+      self.assertEqual(second.status_code, 200, second.text)
+      change = second.json()["intelligence"]["insights"][0]["recent_change"]
+      self.assertEqual(change["status"], "available")
+      self.assertEqual(change["score_change"], 25)
+      self.assertIsNotNone(change["baseline_at"])
+
+    def test_empty_watchlist_insights_returns_compatible_empty_response(self):
+      token = self._login("alice", "Alice@123!")
+
+      response = self.client.get("/api/watchlist/insights", headers={"Authorization": f"Bearer {token}"})
+
+      self.assertEqual(response.status_code, 200, response.text)
+      payload = response.json()
+      self.assertEqual(payload["total"], 0)
+      self.assertEqual(payload["intelligence"]["risk_overview"]["status"], "insufficient_data")
+      self.assertEqual(payload["intelligence"]["insights"], [])
 
     def test_auth_and_watchlist_routes_remain_registered(self):
       routes = {(route.path, ",".join(sorted(route.methods))) for route in self.client.app.routes if hasattr(route, "methods")}

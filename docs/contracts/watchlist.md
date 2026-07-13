@@ -54,3 +54,31 @@
 
 - 洞察中的新增可选字段应由前端渐进增强；未知字段必须忽略。
 - `data_health_overview` 用于组合层面的数据质量提示，不能替代单股 `data_health`。
+
+## Stage 2C: portfolio risk and recent change
+
+`GET /api/watchlist/insights` keeps every legacy top-level field. The
+`intelligence` object adds the following backward-compatible fields:
+
+- `risk_overview`: `status`, `level`, `total_count`, `high_risk_count`, and
+  `insufficient_count`. When the watchlist is empty or every stock lacks enough
+  data, `status` is `insufficient_data` and `level` is `insufficient_data`.
+- `industry_concentration`: the largest non-empty `industry` group, its count
+  and four-decimal ratio, plus `is_concentrated`. A ratio of 0.5 or greater is
+  concentrated. Missing industry data returns `status: insufficient_data`.
+- Each `intelligence.insights[]` item adds `industry` and `recent_change`.
+  `recent_change` contains `score_change`, `risk_score_change`, `baseline_at`,
+  and `current_updated_at`. Deltas are nullable and `status` remains
+  `insufficient_data` until both a prior published baseline and sufficient
+  current data exist.
+
+`sort_modes` continues to include `overall`, `risk`, and `data_health`, and now
+documents `recent_change`: known changes sort by absolute score delta, then by
+update time; unknown changes follow known changes.
+
+The baseline is isolated by authenticated `user_id + stock_code`. The endpoint
+reads local stock/history/factor caches and does not introduce a network refresh.
+After constructing a response it publishes the current baseline for the next
+request. The reversible migration is
+`db/migrations/20260712_watchlist_insight_baselines_up.sql`; rollback uses the
+matching `_down.sql` file.

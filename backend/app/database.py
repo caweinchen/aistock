@@ -15,6 +15,7 @@ REQUIRED_SCHEMA_COLUMNS = {
         "english_name": "english_name VARCHAR(100) DEFAULT ''",
         "ts_code": "ts_code VARCHAR(20) DEFAULT ''",
         "market": "market VARCHAR(10) DEFAULT ''",
+        "industry": "industry VARCHAR(100) DEFAULT ''",
     },
     "price_history": {
         "open": "open FLOAT DEFAULT 0",
@@ -54,6 +55,20 @@ class WatchlistItem(Base):
     user = relationship("User", back_populates="watchlist")
 
 
+class WatchlistInsightBaselineDB(Base):
+    __tablename__ = "watchlist_insight_baselines"
+    __table_args__ = (UniqueConstraint("user_id", "stock_code", name="uq_watchlist_insight_baseline_user_stock"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    stock_code = Column(String(20), ForeignKey("stocks.code"), nullable=False)
+    score = Column(Integer)
+    risk_score = Column(Integer)
+    data_completeness = Column(String(30), nullable=False, default="insufficient")
+    published_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
 class AuthSession(Base):
     __tablename__ = "auth_sessions"
 
@@ -72,6 +87,7 @@ class Stock(Base):
     english_name = Column(String(100), default="")
     ts_code = Column(String(20), default="")  # 通联数据格式: 000001.SZ
     market = Column(String(10), default="")   # SH/SZ
+    industry = Column(String(100), default="")
     price = Column(Float, nullable=False, default=0)
     change_percent = Column(Float, nullable=False, default=0)
     score = Column(Integer, nullable=False, default=50)

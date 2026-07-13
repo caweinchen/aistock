@@ -6,6 +6,35 @@ from typing import Literal
 WatchlistFocusLevel = Literal["priority", "watch", "cautious", "insufficient_data"]
 WatchlistSortMode = Literal["overall", "risk", "data_health", "recent_change"]
 ObservationType = Literal["priority", "risk", "data_quality", "refresh", "balanced"]
+AvailabilityStatus = Literal["available", "insufficient_data"]
+PortfolioRiskLevel = Literal["low", "medium", "high", "insufficient_data"]
+
+
+@dataclass
+class WatchlistRecentChangeResult:
+    status: AvailabilityStatus = "insufficient_data"
+    score_change: int | None = None
+    risk_score_change: int | None = None
+    baseline_at: datetime | None = None
+    current_updated_at: datetime | None = None
+
+
+@dataclass
+class WatchlistRiskOverviewResult:
+    status: AvailabilityStatus = "insufficient_data"
+    level: PortfolioRiskLevel = "insufficient_data"
+    total_count: int = 0
+    high_risk_count: int = 0
+    insufficient_count: int = 0
+
+
+@dataclass
+class WatchlistIndustryConcentrationResult:
+    status: AvailabilityStatus = "insufficient_data"
+    top_industry: str | None = None
+    top_industry_count: int = 0
+    top_industry_ratio: float | None = None
+    is_concentrated: bool = False
 
 
 @dataclass
@@ -22,6 +51,8 @@ class WatchlistStockInsightResult:
     risk_score: int = 0
     priority_score: int = 0
     updated_at: datetime | None = None
+    industry: str | None = None
+    recent_change: WatchlistRecentChangeResult = field(default_factory=WatchlistRecentChangeResult)
 
 
 @dataclass
@@ -48,6 +79,8 @@ class WatchlistIntelligenceResult:
     observations: list[WatchlistObservationResult] = field(default_factory=list)
     insights: list[WatchlistStockInsightResult] = field(default_factory=list)
     sort_modes: list[WatchlistSortMode] = field(default_factory=lambda: ["overall", "risk", "data_health", "recent_change"])
+    risk_overview: WatchlistRiskOverviewResult = field(default_factory=WatchlistRiskOverviewResult)
+    industry_concentration: WatchlistIndustryConcentrationResult = field(default_factory=WatchlistIndustryConcentrationResult)
 
 
 def _as_list(value) -> list[str]:
@@ -84,6 +117,58 @@ def _priority_score(support_points: list[str], risk_score: int, score: int | Non
     if completeness == "insufficient":
         value -= 50
     return max(min(value, 100), 0)
+
+
+def _recent_change(context, score: int | None, risk_score: int, completeness: str) -> WatchlistRecentChangeResult:
+    baseline_score = getattr(context, "baseline_score", None)
+    baseline_risk_score = getattr(context, "baseline_risk_score", None)
+    baseline_at = getattr(context, "baseline_published_at", None)
+    baseline_completeness = getattr(context, "baseline_data_completeness", None)
+    current_updated_at = _updated_at(context)
+    if (
+        completeness == "insufficient"
+        or baseline_completeness in (None, "insufficient")
+        or not isinstance(score, int)
+        or not isinstance(baseline_score, int)
+    ):
+        return WatchlistRecentChangeResult(baseline_at=baseline_at, current_updated_at=current_updated_at)
+    return WatchlistRecentChangeResult(
+        status="available",
+        score_change=score - baseline_score,
+        risk_score_change=risk_score - baseline_risk_score if isinstance(baseline_risk_score, int) else None,
+        baseline_at=baseline_at,
+        current_updated_at=current_updated_at,
+    )
+
+
+def _portfolio_overview(insights: list[WatchlistStockInsightResult]):
+    total = len(insights)
+    insufficient = sum(item.data_completeness == "insufficient" for item in insights)
+    high_risk = sum(item.risk_score >= 45 and item.data_completeness != "insufficient" for item in insights)
+    if not total or insufficient == total:
+        risk = WatchlistRiskOverviewResult(total_count=total, insufficient_count=insufficient)
+    else:
+        ratio = high_risk / total
+        level: PortfolioRiskLevel = "high" if ratio >= 0.5 else "medium" if high_risk else "low"
+        risk = WatchlistRiskOverviewResult(
+            status="available", level=level, total_count=total,
+            high_risk_count=high_risk, insufficient_count=insufficient,
+        )
+
+    counts: dict[str, int] = {}
+    for item in insights:
+        if item.industry:
+            counts[item.industry] = counts.get(item.industry, 0) + 1
+    if not counts or not total:
+        concentration = WatchlistIndustryConcentrationResult()
+    else:
+        industry, count = max(counts.items(), key=lambda entry: (entry[1], entry[0]))
+        ratio = round(count / total, 4)
+        concentration = WatchlistIndustryConcentrationResult(
+            status="available", top_industry=industry, top_industry_count=count,
+            top_industry_ratio=ratio, is_concentrated=ratio >= 0.5,
+        )
+    return risk, concentration
 
 
 def _focus_for(summary, completeness: str, risk_score: int, priority_score: int) -> tuple[WatchlistFocusLevel, str, str]:
@@ -176,6 +261,8 @@ def build_watchlist_intelligence(stock_contexts) -> WatchlistIntelligenceResult:
             risk_score=risk_score,
             priority_score=priority_score,
             updated_at=_updated_at(context),
+            industry=getattr(stock, "industry", None) or None,
+            recent_change=_recent_change(context, score, risk_score, completeness),
         ))
 
     insights = sort_watchlist_insights(insights, "overall")
@@ -193,6 +280,7 @@ def build_watchlist_intelligence(stock_contexts) -> WatchlistIntelligenceResult:
     else:
         summary = "今日自选股整体适合继续观察，暂未出现集中风险或明显机会。"
 
+    risk_overview, industry_concentration = _portfolio_overview(insights)
     return WatchlistIntelligenceResult(
         radar=WatchlistRadarResult(
             title="自选股机会雷达",
@@ -204,6 +292,8 @@ def build_watchlist_intelligence(stock_contexts) -> WatchlistIntelligenceResult:
         ),
         observations=_build_observations(insights),
         insights=insights,
+        risk_overview=risk_overview,
+        industry_concentration=industry_concentration,
     )
 
 
@@ -219,5 +309,13 @@ def sort_watchlist_insights(insights, mode: WatchlistSortMode) -> list[Watchlist
         order = {"insufficient": 0, "incomplete": 1, "mostly_complete": 2, "complete": 3}
         return sorted(items, key=lambda item: (order.get(item.data_completeness, 1), -item.priority_score))
     if mode == "recent_change":
-        return sorted(items, key=lambda item: item.updated_at or datetime.min, reverse=True)
+        return sorted(
+            items,
+            key=lambda item: (
+                item.recent_change.status == "available",
+                abs(item.recent_change.score_change or 0),
+                item.updated_at or datetime.min,
+            ),
+            reverse=True,
+        )
     return sorted(items, key=lambda item: (item.priority_score, -item.risk_score), reverse=True)

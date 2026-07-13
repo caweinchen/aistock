@@ -25,6 +25,18 @@
 
 ## Current Work Queue
 
+### Stage 2C Watchlist Risk Backend
+
+- Owner: backend machine
+- Current status: `Implementation Complete - Verification Pending`
+- Plan: `docs/superpowers/plans/2026-07-12-watchlist-risk-recent-change.md`
+- Contract: `docs/contracts/watchlist.md`
+- Backend branch: `feature/backend/MUL-12-watchlist-risk`
+- Migration: reversible `watchlist_insight_baselines` up/down SQL scripts
+- Next handoff: after backend regression and dual-remote SHA verification, the frontend may integrate the additive `intelligence.risk_overview`, `industry_concentration`, and per-stock `recent_change` fields.
+- [x] TODO: Owner `backend machine` — implement the Stage 2C backend contract without deterministic trading advice.
+- [ ] TODO: Owner `frontend machine` — integrate only after the backend branch is accepted.
+
 ### Backend Structural Guard
 
 - Owner: backend machine

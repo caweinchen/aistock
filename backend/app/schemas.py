@@ -13,6 +13,8 @@ ChecklistStatus = Literal["pass", "attention", "user_confirm", "insufficient_dat
 WatchlistFocusLevel = Literal["priority", "watch", "cautious", "insufficient_data"]
 WatchlistSortMode = Literal["overall", "risk", "data_health", "recent_change"]
 ObservationType = Literal["priority", "risk", "data_quality", "refresh", "balanced"]
+AvailabilityStatus = Literal["available", "insufficient_data"]
+PortfolioRiskLevel = Literal["low", "medium", "high", "insufficient_data"]
 TradeAction = Literal["buy", "sell"]
 StrategyTemplate = Literal["trend-breakout", "low-valuation-reversal", "dividend-defense"]
 
@@ -187,6 +189,32 @@ class WatchlistStockInsight(BaseModel):
     risk_score: int = 0
     priority_score: int = 0
     updated_at: datetime | None = None
+    industry: str | None = None
+    recent_change: "WatchlistRecentChange" = Field(default_factory=lambda: WatchlistRecentChange())
+
+
+class WatchlistRecentChange(BaseModel):
+    status: AvailabilityStatus = "insufficient_data"
+    score_change: int | None = None
+    risk_score_change: int | None = None
+    baseline_at: datetime | None = None
+    current_updated_at: datetime | None = None
+
+
+class WatchlistRiskOverview(BaseModel):
+    status: AvailabilityStatus = "insufficient_data"
+    level: PortfolioRiskLevel = "insufficient_data"
+    total_count: int = 0
+    high_risk_count: int = 0
+    insufficient_count: int = 0
+
+
+class WatchlistIndustryConcentration(BaseModel):
+    status: AvailabilityStatus = "insufficient_data"
+    top_industry: str | None = None
+    top_industry_count: int = 0
+    top_industry_ratio: float | None = None
+    is_concentrated: bool = False
 
 
 class WatchlistRadar(BaseModel):
@@ -210,6 +238,8 @@ class WatchlistIntelligence(BaseModel):
     observations: list[WatchlistObservation] = Field(default_factory=list)
     insights: list[WatchlistStockInsight] = Field(default_factory=list)
     sort_modes: list[WatchlistSortMode] = Field(default_factory=lambda: ["overall", "risk", "data_health", "recent_change"])
+    risk_overview: WatchlistRiskOverview = Field(default_factory=WatchlistRiskOverview)
+    industry_concentration: WatchlistIndustryConcentration = Field(default_factory=WatchlistIndustryConcentration)
 
 
 class StockDetail(BaseModel):
